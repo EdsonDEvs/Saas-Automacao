@@ -155,17 +155,17 @@ export default function DebugPage() {
         return
       }
 
-      if (!integration) {
+      if (!integration || !integration.webhook_url) {
         toast({
           title: "Atenção",
-          description: "Nenhuma integração encontrada. Configure uma em /setup primeiro.",
+          description: "Nenhuma integração encontrada ou webhook_url não configurada. Configure uma em /setup primeiro.",
           variant: "destructive",
         })
         return
       }
 
       const cleanUrl = integration.webhook_url.replace(/\/$/, "")
-      const webhookUrl = `${window.location.origin}/api/webhook/whatsapp`
+      const currentWebhookUrl = webhookUrl || (typeof window !== "undefined" ? `${window.location.origin}/api/webhook/whatsapp` : "")
 
       // Verifica webhook na Evolution API
       const checkResponse = await fetch(
