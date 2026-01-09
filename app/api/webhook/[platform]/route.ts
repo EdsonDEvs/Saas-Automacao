@@ -187,19 +187,25 @@ export async function POST(
         )
       }
 
-    const context = await contextResponse.json()
+      // Gera resposta com IA
+      const openaiKey = process.env.OPENAI_API_KEY
+      if (!openaiKey) {
+        console.error("[Webhook] OPENAI_API_KEY não configurada")
+        return NextResponse.json(
+          { error: "Configuração de IA não encontrada" },
+          { status: 500 }
+        )
+      }
 
-    // Gera resposta com IA
-    const openaiKey = process.env.OPENAI_API_KEY
-    const aiResponse = await generateAIResponse(userMessage, {
-      agentName: context.agent.name,
-      persona: context.agent.persona,
-      tone: context.agent.tone,
-      inventory: context.inventory_text,
-    }, openaiKey)
+      const aiResponse = await generateAIResponse(userMessage, {
+        agentName: context.agent.name || "Assistente",
+        persona: context.agent.persona || "",
+        tone: context.agent.tone || "amigavel",
+        inventory: context.inventory_text || "",
+      }, openaiKey)
 
-    // Envia resposta de volta para a plataforma
-    if (platform === "whatsapp" && integration.webhook_url && integration.instance_name) {
+      // Envia resposta de volta para a plataforma
+      if (platform === "whatsapp" && integration.webhook_url && integration.instance_name) {
       try {
         const cleanUrl = integration.webhook_url.replace(/\/$/, "")
         
@@ -271,12 +277,22 @@ export async function POST(
       }
     }
 
-    // Retorna resposta para confirmação
-    return NextResponse.json({
-      status: "success",
-      message: "Mensagem processada e resposta enviada",
-      response: aiResponse,
-    })
+      // Retorna resposta para confirmação
+      return NextResponse.json({
+        status: "success",
+        message: "Mensagem processada e resposta enviada",
+        response: aiResponse,
+      })
+    } catch (contextError: any) {
+      console.error("[Webhook] Erro ao processar contexto:", contextError)
+      return NextResponse.json(
+        { 
+          error: "Erro ao processar contexto do agente",
+          details: contextError.message 
+        },
+        { status: 500 }
+      )
+    }
   } catch (error: any) {
     console.error("Webhook error:", error)
     return NextResponse.json(
