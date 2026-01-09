@@ -83,25 +83,37 @@ export async function POST(
     
     if (platform === "whatsapp" && instanceName) {
       // Tenta encontrar pela instância primeiro
-      const { data: integrationByInstance } = await supabase
+      const { data: integrationByInstance, error: instanceError } = await supabase
         .from("integrations")
         .select("user_id, webhook_url, api_key, instance_name")
         .eq("platform", platform)
         .eq("instance_name", instanceName)
         .eq("is_active", true)
-        .single()
+        .maybeSingle()
+      
+      if (instanceError) {
+        console.error("[Webhook] Erro ao buscar integração por instância:", instanceError)
+      }
       
       integration = integrationByInstance
     }
     
     // Se não encontrou, busca todas as ativas e pega a primeira
     if (!integration) {
-      const { data: integrations } = await supabase
+      const { data: integrations, error: integrationsError } = await supabase
         .from("integrations")
         .select("user_id, webhook_url, api_key, instance_name")
         .eq("platform", platform)
         .eq("is_active", true)
         .limit(1)
+
+      if (integrationsError) {
+        console.error("[Webhook] Erro ao buscar integrações:", integrationsError)
+        return NextResponse.json(
+          { error: "Erro ao buscar integração", details: integrationsError.message },
+          { status: 500 }
+        )
+      }
 
       if (!integrations || integrations.length === 0) {
         return NextResponse.json(
@@ -112,37 +124,68 @@ export async function POST(
       integration = integrations[0]
     }
 
+    if (!integration || !integration.user_id) {
+      return NextResponse.json(
+        { error: "Integração inválida ou incompleta" },
+        { status: 404 }
+      )
+    }
+
     // Busca o contexto do agente
-    const { data: apiKey } = await supabase
+    const { data: apiKey, error: apiKeyError } = await supabase
       .from("api_keys")
       .select("key")
       .eq("user_id", integration.user_id)
       .eq("is_active", true)
-      .single()
+      .maybeSingle()
 
-    if (!apiKey) {
+    if (apiKeyError) {
+      console.error("[Webhook] Erro ao buscar API key:", apiKeyError)
       return NextResponse.json(
-        { error: "API key não encontrada" },
+        { error: "Erro ao buscar API key", details: apiKeyError.message },
+        { status: 500 }
+      )
+    }
+
+    if (!apiKey || !apiKey.key) {
+      return NextResponse.json(
+        { error: "API key não encontrada para este usuário" },
         { status: 404 }
       )
     }
 
     // Busca contexto do agente
-    const contextResponse = await fetch(
-      `${request.nextUrl.origin}/api/v1/context`,
-      {
+    try {
+      const contextUrl = `${request.nextUrl.origin}/api/v1/context`
+      console.log(`[Webhook] Buscando contexto em: ${contextUrl}`)
+      
+      const contextResponse = await fetch(contextUrl, {
         headers: {
           "x-api-key": apiKey.key,
         },
-      }
-    )
+      })
 
-    if (!contextResponse.ok) {
-      return NextResponse.json(
-        { error: "Erro ao buscar contexto do agente" },
-        { status: 500 }
-      )
-    }
+      if (!contextResponse.ok) {
+        const errorText = await contextResponse.text()
+        console.error(`[Webhook] Erro ao buscar contexto: ${contextResponse.status}`, errorText)
+        return NextResponse.json(
+          { 
+            error: "Erro ao buscar contexto do agente",
+            details: errorText || `Status: ${contextResponse.status}`
+          },
+          { status: contextResponse.status || 500 }
+        )
+      }
+
+      const context = await contextResponse.json()
+      
+      if (!context || !context.agent) {
+        console.error("[Webhook] Contexto inválido recebido:", context)
+        return NextResponse.json(
+          { error: "Contexto do agente inválido ou incompleto" },
+          { status: 500 }
+        )
+      }
 
     const context = await contextResponse.json()
 

@@ -21,9 +21,17 @@ export async function GET(request: NextRequest) {
       .select("user_id")
       .eq("key", apiKey)
       .eq("is_active", true)
-      .single()
+      .maybeSingle()
 
-    if (apiKeyError || !apiKeyData) {
+    if (apiKeyError) {
+      console.error("[Context API] Erro ao buscar API key:", apiKeyError)
+      return NextResponse.json(
+        { error: "Erro ao validar API key.", details: apiKeyError.message },
+        { status: 500 }
+      )
+    }
+
+    if (!apiKeyData || !apiKeyData.user_id) {
       return NextResponse.json(
         { error: "API key inválida ou inativa." },
         { status: 401 }
@@ -37,9 +45,17 @@ export async function GET(request: NextRequest) {
       .from("agent_configs")
       .select("*")
       .eq("user_id", userId)
-      .single()
+      .maybeSingle()
 
     if (agentError) {
+      console.error("[Context API] Erro ao buscar agent config:", agentError)
+      return NextResponse.json(
+        { error: "Erro ao buscar configuração do agente.", details: agentError.message },
+        { status: 500 }
+      )
+    }
+
+    if (!agentConfig) {
       return NextResponse.json(
         { error: "Configuração do agente não encontrada." },
         { status: 404 }
