@@ -140,7 +140,13 @@ export default async function DashboardPage() {
               <CardTitle>Ações Rápidas</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-4">
+                <Link href="/setup">
+                  <Button className="w-full">
+                    <Code className="mr-2 h-4 w-4" />
+                    Configurar WhatsApp/Telegram
+                  </Button>
+                </Link>
                 <Link href="/agent">
                   <Button variant="outline" className="w-full">
                     <Bot className="mr-2 h-4 w-4" />

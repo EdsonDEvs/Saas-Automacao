@@ -49,6 +49,12 @@ export function Navbar() {
                 Produtos
               </Button>
             </Link>
+            <Link href="/setup">
+              <Button variant="ghost" size="sm">
+                <Code className="mr-2 h-4 w-4" />
+                Configurar
+              </Button>
+            </Link>
             <Link href="/integration">
               <Button variant="ghost" size="sm">
                 <Code className="mr-2 h-4 w-4" />
