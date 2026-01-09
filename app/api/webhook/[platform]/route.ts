@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { generateAIResponse } from "@/lib/ai/openai"
 
 export async function POST(
   request: NextRequest,
@@ -9,19 +10,57 @@ export async function POST(
     const platform = params.platform
     const body = await request.json()
 
-    // Busca a integração baseada no webhook secret ou outros identificadores
-    // Por enquanto, vamos buscar pela plataforma e processar
+    // Log para debug (remover em produção ou usar logger adequado)
+    console.log(`[Webhook ${platform}] Recebido:`, JSON.stringify(body, null, 2))
+
     const supabase = await createClient()
 
     // Extrai informações da mensagem baseado na plataforma
     let userMessage = ""
     let fromNumber = ""
     let chatId = ""
+    let instanceName = ""
 
     if (platform === "whatsapp") {
-      // Formato Evolution API
-      userMessage = body.text?.body || body.message?.text || body.body?.message || ""
-      fromNumber = body.from || body.key?.remoteJid || ""
+      // Evolution API pode enviar em diferentes formatos dependendo da versão
+      // Formato 1: body.data (webhook por eventos)
+      if (body.data) {
+        const data = body.data
+        userMessage = data.text?.body || 
+                     data.message?.conversation || 
+                     data.message?.extendedTextMessage?.text ||
+                     data.message?.conversation ||
+                     ""
+        fromNumber = data.key?.remoteJid || data.from || ""
+        instanceName = data.instance || body.instance || ""
+      }
+      // Formato 2: body direto (webhook simples)
+      else {
+        userMessage = body.text?.body || 
+                     body.message?.conversation || 
+                     body.message?.extendedTextMessage?.text ||
+                     body.conversation ||
+                     body.body?.message || 
+                     ""
+        
+        fromNumber = body.key?.remoteJid || body.from || ""
+        instanceName = body.instance || body.instanceName || ""
+      }
+      
+      // Limpa número (remove @s.whatsapp.net e @c.us)
+      if (fromNumber) {
+        fromNumber = fromNumber.replace("@s.whatsapp.net", "").replace("@c.us", "")
+      }
+      
+      // Log extraído
+      console.log(`[Webhook WhatsApp] Mensagem: "${userMessage}", De: ${fromNumber}, Instância: ${instanceName}`)
+      
+      // Ignora mensagens do próprio sistema, status ou vazias
+      const isFromMe = body.key?.fromMe || body.data?.key?.fromMe || body.fromMe
+      if (isFromMe || !userMessage.trim()) {
+        console.log(`[Webhook WhatsApp] Ignorado: fromMe=${isFromMe}, mensagem vazia=${!userMessage.trim()}`)
+        return NextResponse.json({ status: "ignored", reason: isFromMe ? "fromMe" : "empty" })
+      }
     } else if (platform === "telegram") {
       // Formato Telegram
       userMessage = body.message?.text || ""
@@ -39,24 +78,39 @@ export async function POST(
       )
     }
 
-    // Busca todas as integrações ativas desta plataforma
-    // Em produção, você deve identificar qual usuário baseado em algum identificador único
-    const { data: integrations } = await supabase
-      .from("integrations")
-      .select("user_id")
-      .eq("platform", platform)
-      .eq("is_active", true)
-
-    if (!integrations || integrations.length === 0) {
-      return NextResponse.json(
-        { error: "Nenhuma integração ativa encontrada" },
-        { status: 404 }
-      )
+    // Busca integração baseada na instância (WhatsApp) ou primeira ativa
+    let integration
+    
+    if (platform === "whatsapp" && instanceName) {
+      // Tenta encontrar pela instância primeiro
+      const { data: integrationByInstance } = await supabase
+        .from("integrations")
+        .select("user_id, webhook_url, api_key, instance_name")
+        .eq("platform", platform)
+        .eq("instance_name", instanceName)
+        .eq("is_active", true)
+        .single()
+      
+      integration = integrationByInstance
     }
+    
+    // Se não encontrou, busca todas as ativas e pega a primeira
+    if (!integration) {
+      const { data: integrations } = await supabase
+        .from("integrations")
+        .select("user_id, webhook_url, api_key, instance_name")
+        .eq("platform", platform)
+        .eq("is_active", true)
+        .limit(1)
 
-    // Por enquanto, pega a primeira integração ativa
-    // Em produção, você deve identificar qual usuário baseado no número/chat
-    const integration = integrations[0]
+      if (!integrations || integrations.length === 0) {
+        return NextResponse.json(
+          { error: "Nenhuma integração ativa encontrada" },
+          { status: 404 }
+        )
+      }
+      integration = integrations[0]
+    }
 
     // Busca o contexto do agente
     const { data: apiKey } = await supabase
@@ -92,16 +146,94 @@ export async function POST(
 
     const context = await contextResponse.json()
 
-    // Aqui você pode integrar com OpenAI ou outro LLM
-    // Por enquanto, retornamos uma resposta simples
-    // Em produção, você deve chamar a API de IA aqui
+    // Gera resposta com IA
+    const openaiKey = process.env.OPENAI_API_KEY
+    const aiResponse = await generateAIResponse(userMessage, {
+      agentName: context.agent.name,
+      persona: context.agent.persona,
+      tone: context.agent.tone,
+      inventory: context.inventory_text,
+    }, openaiKey)
 
-    const response = {
-      message: `Olá! Esta é uma resposta automática. Sua mensagem: "${userMessage}". Em produção, isso será processado por IA.`,
-      // Adicione aqui a lógica para enviar a resposta de volta para a plataforma
+    // Envia resposta de volta para a plataforma
+    if (platform === "whatsapp" && integration.webhook_url && integration.instance_name) {
+      try {
+        const cleanUrl = integration.webhook_url.replace(/\/$/, "")
+        
+        // Formata número corretamente
+        const formattedNumber = fromNumber.includes("@") 
+          ? fromNumber 
+          : `${fromNumber}@s.whatsapp.net`
+        
+        console.log(`[Webhook WhatsApp] Enviando resposta para ${formattedNumber} via ${integration.instance_name}`)
+        
+        const sendPayload = {
+          number: formattedNumber,
+          text: aiResponse,
+        }
+        
+        let sendResponse = await fetch(
+          `${cleanUrl}/message/sendText/${integration.instance_name}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": integration.api_key,
+            },
+            body: JSON.stringify(sendPayload),
+          }
+        )
+
+        // Se falhar, tenta com Authorization
+        if (!sendResponse.ok && sendResponse.status === 401) {
+          console.log(`[Webhook WhatsApp] Tentando com Authorization header`)
+          sendResponse = await fetch(
+            `${cleanUrl}/message/sendText/${integration.instance_name}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${integration.api_key}`,
+              },
+              body: JSON.stringify(sendPayload),
+            }
+          )
+        }
+
+        if (!sendResponse.ok) {
+          const errorText = await sendResponse.text()
+          console.error(`[Webhook WhatsApp] Erro ao enviar: Status ${sendResponse.status}`, errorText)
+        } else {
+          const responseData = await sendResponse.json().catch(() => ({}))
+          console.log(`[Webhook WhatsApp] Resposta enviada com sucesso:`, responseData)
+        }
+      } catch (error: any) {
+        console.error("[Webhook WhatsApp] Erro ao enviar resposta:", error.message, error)
+      }
+    } else if (platform === "telegram" && integration.bot_token) {
+      try {
+        // Envia mensagem via Telegram API
+        await fetch(`https://api.telegram.org/bot${integration.bot_token}/sendMessage`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: aiResponse,
+          }),
+        })
+      } catch (error) {
+        console.error("Erro ao enviar resposta para Telegram:", error)
+      }
     }
 
-    return NextResponse.json(response)
+    // Retorna resposta para confirmação
+    return NextResponse.json({
+      status: "success",
+      message: "Mensagem processada e resposta enviada",
+      response: aiResponse,
+    })
   } catch (error: any) {
     console.error("Webhook error:", error)
     return NextResponse.json(

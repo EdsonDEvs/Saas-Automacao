@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
-import { LogOut, LayoutDashboard, Bot, Package, Code } from "lucide-react"
+import { LogOut, LayoutDashboard, Bot, Package, Code, AlertCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export function Navbar() {
@@ -59,6 +59,12 @@ export function Navbar() {
               <Button variant="ghost" size="sm">
                 <Code className="mr-2 h-4 w-4" />
                 Integração
+              </Button>
+            </Link>
+            <Link href="/debug">
+              <Button variant="ghost" size="sm">
+                <AlertCircle className="mr-2 h-4 w-4" />
+                Debug
               </Button>
             </Link>
           </div>
