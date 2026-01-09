@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { ensureUserProfile } from "@/lib/supabase/ensure-profile"
-import { Loader2, Send, CheckCircle2, XCircle, AlertCircle } from "lucide-react"
+import { Loader2, Send, CheckCircle2, XCircle, AlertCircle, ExternalLink } from "lucide-react"
 
 export default function DebugPage() {
   const [testing, setTesting] = useState(false)
@@ -26,25 +26,54 @@ export default function DebugPage() {
 
     try {
       await ensureUserProfile()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      
+      // Verifica autenticação
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        setResult({
+          success: false,
+          error: `Erro de autenticação: ${authError?.message || "Usuário não encontrado"}`,
+        })
         router.push("/login")
         return
       }
 
-      // Busca integração
-      const { data: integration } = await supabase
+      // Busca integração com tratamento de erro melhorado
+      const { data: integration, error: integrationError } = await supabase
         .from("integrations")
         .select("webhook_url, api_key, instance_name")
         .eq("user_id", user.id)
         .eq("platform", "whatsapp")
         .eq("is_active", true)
-        .single()
+        .maybeSingle()
+
+      if (integrationError) {
+        console.error("Erro ao buscar integração:", integrationError)
+        
+        // Verifica se é erro de tabela não encontrada
+        const isTableNotFound = integrationError.message?.includes("does not exist") || 
+                                integrationError.code === "PGRST116" ||
+                                integrationError.message?.includes("relation") ||
+                                integrationError.message?.includes("406")
+        
+        setResult({
+          success: false,
+          error: isTableNotFound 
+            ? "Tabela 'integrations' não encontrada. Execute a migração 002_integrations.sql no Supabase SQL Editor."
+            : `Erro ao buscar integração: ${integrationError.message || integrationError.code || "Erro desconhecido"}`,
+          details: {
+            code: integrationError.code,
+            message: integrationError.message,
+            hint: integrationError.hint,
+          },
+        })
+        return
+      }
 
       if (!integration) {
         setResult({
           success: false,
-          error: "Nenhuma integração WhatsApp ativa encontrada",
+          error: "Nenhuma integração WhatsApp ativa encontrada. Configure uma integração em /setup primeiro.",
         })
         return
       }
@@ -88,24 +117,48 @@ export default function DebugPage() {
   const checkWebhookConfig = async () => {
     try {
       await ensureUserProfile()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        toast({
+          title: "Erro",
+          description: `Erro de autenticação: ${authError?.message || "Usuário não encontrado"}`,
+          variant: "destructive",
+        })
         router.push("/login")
         return
       }
 
-      const { data: integration } = await supabase
+      const { data: integration, error: integrationError } = await supabase
         .from("integrations")
         .select("webhook_url, api_key, instance_name")
         .eq("user_id", user.id)
         .eq("platform", "whatsapp")
         .eq("is_active", true)
-        .single()
+        .maybeSingle()
+
+      if (integrationError) {
+        console.error("Erro ao buscar integração:", integrationError)
+        
+        const isTableNotFound = integrationError.message?.includes("does not exist") || 
+                                integrationError.code === "PGRST116" ||
+                                integrationError.message?.includes("relation") ||
+                                integrationError.message?.includes("406")
+        
+        toast({
+          title: "Erro",
+          description: isTableNotFound
+            ? "Tabela 'integrations' não encontrada. Execute a migração 002_integrations.sql no Supabase."
+            : `Erro: ${integrationError.message || integrationError.code || "Erro desconhecido"}`,
+          variant: "destructive",
+        })
+        return
+      }
 
       if (!integration) {
         toast({
-          title: "Erro",
-          description: "Nenhuma integração encontrada",
+          title: "Atenção",
+          description: "Nenhuma integração encontrada. Configure uma em /setup primeiro.",
           variant: "destructive",
         })
         return
@@ -250,7 +303,7 @@ export default function DebugPage() {
             <CardHeader>
               <CardTitle>Informações Úteis</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
+            <CardContent className="space-y-4 text-sm">
               <div>
                 <strong>URL do Webhook:</strong>
                 <code className="ml-2 px-2 py-1 bg-muted rounded">
@@ -263,6 +316,26 @@ export default function DebugPage() {
                   {typeof window !== "undefined" ? `${window.location.origin}/api/webhook/test` : ""}
                 </code>
               </div>
+              
+              {result && result.error && result.error.includes("migração") && (
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
+                  <p className="font-semibold text-yellow-800 dark:text-yellow-200 mb-2">
+                    ⚠️ Tabela 'integrations' não encontrada
+                  </p>
+                  <p className="text-yellow-700 dark:text-yellow-300 mb-2">
+                    Execute a migração no Supabase:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-yellow-700 dark:text-yellow-300 mb-2">
+                    <li>Acesse o Supabase Dashboard</li>
+                    <li>Vá em SQL Editor</li>
+                    <li>Execute o arquivo: <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">supabase/migrations/002_integrations.sql</code></li>
+                  </ol>
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                    Ou veja o arquivo <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">MIGRACAO-INTEGRACOES.md</code> para instruções detalhadas.
+                  </p>
+                </div>
+              )}
+              
               <p className="text-muted-foreground mt-4">
                 💡 <strong>Dica:</strong> Verifique os logs do servidor para ver mensagens recebidas e erros.
               </p>
