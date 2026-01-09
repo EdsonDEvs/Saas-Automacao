@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { generateAIResponse } from "@/lib/ai/openai"
 
 export async function POST(
@@ -13,7 +13,8 @@ export async function POST(
     // Log para debug (remover em produção ou usar logger adequado)
     console.log(`[Webhook ${platform}] Recebido:`, JSON.stringify(body, null, 2))
 
-    const supabase = await createClient()
+    // Usa admin client para bypassar RLS (webhook não tem autenticação de usuário)
+    const supabase = createAdminClient()
 
     // Extrai informações da mensagem baseado na plataforma
     let userMessage = ""
