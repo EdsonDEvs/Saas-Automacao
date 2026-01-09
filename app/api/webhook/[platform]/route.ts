@@ -132,6 +132,7 @@ export async function POST(
     }
 
     // Busca o contexto do agente
+    console.log(`[Webhook] Buscando API key para user_id: ${integration.user_id}`)
     const { data: apiKey, error: apiKeyError } = await supabase
       .from("api_keys")
       .select("key")
@@ -141,18 +142,27 @@ export async function POST(
 
     if (apiKeyError) {
       console.error("[Webhook] Erro ao buscar API key:", apiKeyError)
+      console.error("[Webhook] Detalhes do erro:", JSON.stringify(apiKeyError, null, 2))
       return NextResponse.json(
-        { error: "Erro ao buscar API key", details: apiKeyError.message },
+        { error: "Erro ao buscar API key", details: apiKeyError.message, code: apiKeyError.code },
         { status: 500 }
       )
     }
 
+    console.log(`[Webhook] API key encontrada:`, apiKey ? "Sim" : "Não")
+
     if (!apiKey || !apiKey.key) {
+      console.error(`[Webhook] API key não encontrada para user_id: ${integration.user_id}`)
       return NextResponse.json(
-        { error: "API key não encontrada para este usuário" },
+        { 
+          error: "API key não encontrada para este usuário",
+          details: `Nenhuma API key ativa encontrada para o usuário ${integration.user_id}. Verifique se o usuário tem uma API key criada.`
+        },
         { status: 404 }
       )
     }
+
+    console.log(`[Webhook] API key válida encontrada, usando para buscar contexto`)
 
     // Busca contexto do agente
     try {
