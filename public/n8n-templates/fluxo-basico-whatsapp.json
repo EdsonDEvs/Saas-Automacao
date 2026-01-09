@@ -1,0 +1,146 @@
+{
+  "name": "SaaS Automação - Fluxo Básico WhatsApp",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-whatsapp",
+      "name": "Webhook WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "whatsapp-webhook",
+      "notes": "Recebe mensagens do WhatsApp"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.API_ENDPOINT || 'https://seu-dominio.com/api/v1/context' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.API_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-context",
+      "name": "Buscar Contexto do Agente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 300],
+      "notes": "Busca configuração do agente e produtos"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai dados do contexto\nconst context = $input.first().json;\n\n// Prepara mensagem para o LLM\nconst systemPrompt = context.agent.persona;\nconst inventory = context.inventory_text;\nconst userMessage = $input.first().json.body?.message || $input.first().json.message || '';\n\n// Monta prompt completo\nconst fullPrompt = `${systemPrompt}\\n\\nInventário:\\n${inventory}\\n\\nCliente: ${userMessage}`;\n\nreturn {\n  json: {\n    messages: [\n      {\n        role: 'system',\n        content: systemPrompt\n      },\n      {\n        role: 'user',\n        content: userMessage\n      }\n    ],\n    inventory: inventory,\n    agentName: context.agent.name,\n    tone: context.agent.tone\n  }\n};"
+      },
+      "id": "prepare-llm",
+      "name": "Preparar para LLM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "notes": "Prepara dados para enviar ao LLM"
+    },
+    {
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 500
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "={{ $json.messages[0].role }}",
+              "content": "={{ $json.messages[0].content }}"
+            },
+            {
+              "role": "={{ $json.messages[1].role }}",
+              "content": "={{ $json.messages[1].content }}"
+            }
+          ]
+        }
+      },
+      "id": "openai-chat",
+      "name": "OpenAI Chat",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "notes": "Gera resposta usando IA"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "to": "={{ $('Webhook WhatsApp').item.json.from }}",
+        "message": "={{ $json.text }}"
+      },
+      "id": "send-whatsapp",
+      "name": "Enviar Resposta WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "notes": "Envia resposta ao cliente"
+    }
+  ],
+  "connections": {
+    "Webhook WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Buscar Contexto do Agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Contexto do Agente": {
+      "main": [
+        [
+          {
+            "node": "Preparar para LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar para LLM": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat": {
+      "main": [
+        [
+          {
+            "node": "Enviar Resposta WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

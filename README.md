@@ -52,6 +52,26 @@ npm run dev
 - ✅ Gerenciamento de produtos (CRUD)
 - ✅ Geração e gerenciamento de API Keys
 - ✅ Endpoint API `/api/v1/context` para integração com n8n/Typebot
+- ✅ **Templates n8n prontos para download** - Fluxos pré-configurados para WhatsApp, Telegram e uso genérico
+
+## 📦 Templates n8n
+
+O projeto inclui templates de fluxos prontos para o n8n que podem ser baixados e importados diretamente:
+
+- **Fluxo Simples Genérico** - Template básico que funciona com qualquer plataforma
+- **Fluxo Básico WhatsApp** - Integração com WhatsApp via webhook
+- **Fluxo Completo Telegram** - Fluxo completo com comandos e tratamento de mensagens
+
+Os templates estão disponíveis em `/public/n8n-templates/` e podem ser baixados diretamente da página de Integração no sistema.
+
+### Como usar os templates:
+
+1. Acesse a página **Integração** no sistema
+2. Baixe o template desejado
+3. No n8n, importe o arquivo JSON
+4. Configure as variáveis de ambiente (API_ENDPOINT e API_KEY)
+5. Configure as credenciais necessárias (OpenAI, WhatsApp, Telegram)
+6. Ative o workflow e comece a usar!
 
 ## 📝 Licença
 

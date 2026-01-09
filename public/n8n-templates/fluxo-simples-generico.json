@@ -1,0 +1,150 @@
+{
+  "name": "SaaS Automação - Fluxo Simples Genérico",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "saas-automacao-webhook",
+      "notes": "Recebe mensagens via webhook (pode ser usado com qualquer plataforma)"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.API_ENDPOINT }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.API_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-context",
+      "name": "Buscar Contexto do Agente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 300],
+      "notes": "Busca configuração do agente e produtos da API"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepara dados para o LLM\nconst context = $input.first().json;\nconst userMessage = $input.first().json.body?.message || $input.first().json.message || 'Olá';\n\n// Extrai informações do contexto\nconst systemPrompt = context.agent.persona || context.context;\nconst inventory = context.inventory_text || '';\n\nreturn {\n  json: {\n    systemPrompt: systemPrompt,\n    userMessage: userMessage,\n    inventory: inventory,\n    agentName: context.agent?.name || 'Assistente',\n    tone: context.agent?.tone || 'Friendly'\n  }\n};"
+      },
+      "id": "prepare-data",
+      "name": "Preparar Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "notes": "Prepara os dados para enviar ao LLM"
+    },
+    {
+      "parameters": {
+        "model": "gpt-3.5-turbo",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 500
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "={{ $json.systemPrompt }}\n\nInventário disponível:\n{{ $json.inventory }}"
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.userMessage }}"
+            }
+          ]
+        }
+      },
+      "id": "openai",
+      "name": "OpenAI Chat",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "notes": "Gera resposta usando IA (configure sua credencial OpenAI)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"response\": $json.text, \"agent\": $('Preparar Dados').item.json.agentName } }}",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Responder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "notes": "Retorna resposta ao cliente"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Buscar Contexto do Agente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Contexto do Agente": {
+      "main": [
+        [
+          {
+            "node": "Preparar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Dados": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat": {
+      "main": [
+        [
+          {
+            "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

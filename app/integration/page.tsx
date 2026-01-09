@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { ensureUserProfile } from "@/lib/supabase/ensure-profile"
-import { Copy, RefreshCw, Loader2, Check } from "lucide-react"
+import { Copy, RefreshCw, Loader2, Check, Download, FileJson } from "lucide-react"
 
 type ApiKey = {
   id: string
@@ -294,6 +294,103 @@ export default function IntegrationPage() {
                   4. Adicione o header: <code className="bg-muted px-1 rounded">x-api-key</code> com sua API key
                   <br />
                   5. Use a resposta JSON no seu fluxo
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Download className="h-5 w-5" />
+                Templates n8n Prontos
+              </CardTitle>
+              <CardDescription>
+                Baixe fluxos prontos para usar no n8n - basta importar e configurar
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-primary/5">
+                  <div className="flex items-center gap-3">
+                    <FileJson className="h-5 w-5 text-primary" />
+                    <div>
+                      <h4 className="font-semibold">Fluxo Simples Genérico ⭐</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Template básico que funciona com qualquer plataforma (recomendado para começar)
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      window.open('/n8n-templates/fluxo-simples-generico.json', '_blank')
+                    }}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Baixar
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <FileJson className="h-5 w-5 text-primary" />
+                    <div>
+                      <h4 className="font-semibold">Fluxo Básico WhatsApp</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Integração simples com WhatsApp usando webhook
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      window.open('/n8n-templates/fluxo-basico-whatsapp.json', '_blank')
+                    }}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Baixar
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <FileJson className="h-5 w-5 text-primary" />
+                    <div>
+                      <h4 className="font-semibold">Fluxo Completo Telegram</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Fluxo completo com comandos e tratamento de mensagens
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      window.open('/n8n-templates/fluxo-completo-telegram.json', '_blank')
+                    }}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Baixar
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-4 p-4 bg-muted rounded-lg">
+                <h4 className="font-semibold mb-2">Como usar os templates:</h4>
+                <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
+                  <li>Baixe o template desejado</li>
+                  <li>No n8n, vá em <strong>Workflows</strong> → <strong>Import</strong></li>
+                  <li>Selecione o arquivo JSON baixado</li>
+                  <li>Configure as variáveis de ambiente:
+                    <ul className="list-disc list-inside ml-4 mt-1">
+                      <li><code>API_ENDPOINT</code> = {getEndpointUrl()}</li>
+                      <li><code>API_KEY</code> = {apiKey?.key || "sua-api-key"}</li>
+                    </ul>
+                  </li>
+                  <li>Configure as credenciais (WhatsApp, Telegram, OpenAI)</li>
+                  <li>Ative o workflow e teste!</li>
+                </ol>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  💡 Dica: Os templates já estão pré-configurados para buscar automaticamente o contexto do seu agente e produtos!
                 </p>
               </div>
             </CardContent>
