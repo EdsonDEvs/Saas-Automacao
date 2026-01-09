@@ -270,9 +270,10 @@ export default function SetupPage() {
         const response = await fetch(`/api/evolution/status?instance=${encodedInstanceName}`)
         
         if (!response.ok) {
-          // Se der erro, para de verificar
-          if (response.status === 404 || response.status >= 500) {
+          // Se der erro 401 (não autenticado) ou 404 (não encontrado), para de verificar
+          if (response.status === 401 || response.status === 404 || response.status >= 500) {
             clearInterval(interval)
+            console.log("Parando verificação automática devido a erro:", response.status)
           }
           return
         }
@@ -741,7 +742,7 @@ export default function SetupPage() {
               {step === 3 && (
                 <Button 
                   onClick={handleSave} 
-                  disabled={saving || (platform === "whatsapp" && !isConnected)}
+                  disabled={saving}
                 >
                   {saving ? (
                     <>
