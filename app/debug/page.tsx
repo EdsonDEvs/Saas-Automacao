@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { ensureUserProfile } from "@/lib/supabase/ensure-profile"
-import { Loader2, Send, CheckCircle2, XCircle, AlertCircle, ExternalLink } from "lucide-react"
+import { Loader2, Send, CheckCircle2, XCircle, AlertCircle, ExternalLink, Settings } from "lucide-react"
 
 export default function DebugPage() {
   const [testing, setTesting] = useState(false)
@@ -212,6 +212,39 @@ export default function DebugPage() {
         </div>
 
         <div className="space-y-6">
+          {/* Card informativo quando não há integração */}
+          {result && result.error && result.error.includes("Nenhuma integração") && (
+            <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  Configure uma Integração Primeiro
+                </CardTitle>
+                <CardDescription>
+                  Você precisa configurar uma integração WhatsApp antes de testar o webhook.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  onClick={() => router.push("/setup")} 
+                  className="w-full"
+                  size="lg"
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  Ir para Página de Configuração
+                </Button>
+                <p className="text-sm text-muted-foreground mt-3 text-center">
+                  Na página de configuração, você pode:
+                </p>
+                <ul className="text-sm text-muted-foreground mt-2 space-y-1 list-disc list-inside">
+                  <li>Conectar seu WhatsApp via Evolution API</li>
+                  <li>Configurar webhook automaticamente</li>
+                  <li>Escanear QR Code para autenticação</li>
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Testar Webhook</CardTitle>
@@ -333,6 +366,25 @@ export default function DebugPage() {
                   <p className="text-xs text-yellow-600 dark:text-yellow-400">
                     Ou veja o arquivo <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">MIGRACAO-INTEGRACOES.md</code> para instruções detalhadas.
                   </p>
+                </div>
+              )}
+
+              {result && result.error && result.error.includes("Nenhuma integração") && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
+                  <p className="font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                    ℹ️ Configure uma integração primeiro
+                  </p>
+                  <p className="text-blue-700 dark:text-blue-300 mb-3">
+                    Você precisa configurar uma integração WhatsApp antes de testar o webhook.
+                  </p>
+                  <Button 
+                    onClick={() => router.push("/setup")} 
+                    className="w-full"
+                    variant="default"
+                  >
+                    <Settings className="mr-2 h-4 w-4" />
+                    Ir para Configuração
+                  </Button>
                 </div>
               )}
               
