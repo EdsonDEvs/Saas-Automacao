@@ -16,9 +16,19 @@ export default function DebugPage() {
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [testMessage, setTestMessage] = useState("teste")
+  const [webhookUrl, setWebhookUrl] = useState("")
+  const [testUrl, setTestUrl] = useState("")
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClient()
+
+  useEffect(() => {
+    // Só define URLs no cliente para evitar erro de hidratação
+    if (typeof window !== "undefined") {
+      setWebhookUrl(`${window.location.origin}/api/webhook/whatsapp`)
+      setTestUrl(`${window.location.origin}/api/webhook/test`)
+    }
+  }, [])
 
   const testWebhook = async () => {
     setTesting(true)
