@@ -65,23 +65,49 @@ export default function SetupPage() {
     setSaving(true)
     try {
       await ensureUserProfile()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      
+      if (authError || !user) {
+        toast({
+          title: "Erro de autenticação",
+          description: "Faça login novamente",
+          variant: "destructive",
+        })
         router.push("/login")
         return
       }
 
-      const { error } = await supabase
+      // Valida campos obrigatórios
+      if (platform === "whatsapp") {
+        if (!integration.webhook_url || !integration.api_key) {
+          toast({
+            title: "Campos obrigatórios",
+            description: "Preencha a URL e API Key da Evolution API",
+            variant: "destructive",
+          })
+          setSaving(false)
+          return
+        }
+      }
+
+      const { error, data } = await supabase
         .from("integrations")
         .upsert({
           user_id: user.id,
           platform: platform,
           ...integration,
+          is_active: integration.is_active ?? true,
         }, {
           onConflict: "user_id,platform"
         })
+        .select()
 
-      if (error) throw error
+      if (error) {
+        console.error("Erro ao salvar integração:", error)
+        throw error
+      }
+
+      console.log("Integração salva com sucesso:", data)
 
       toast({
         title: "Sucesso!",
@@ -89,9 +115,10 @@ export default function SetupPage() {
       })
       setStep(4) // Vai para o passo final
     } catch (error: any) {
+      console.error("Erro completo:", error)
       toast({
         title: "Erro",
-        description: error.message || "Erro ao salvar configuração",
+        description: error.message || error.details || "Erro ao salvar configuração",
         variant: "destructive",
       })
     } finally {

@@ -30,19 +30,19 @@ export async function GET(request: NextRequest) {
       .eq("user_id", user.id)
       .eq("platform", "whatsapp")
       .eq("instance_name", instanceName)
-      .single()
+      .maybeSingle()
 
-    if (integrationError || !integration) {
+    if (integrationError) {
       console.error("Erro ao buscar integração:", integrationError)
       return NextResponse.json(
-        { error: "Integração não encontrada", details: integrationError?.message },
-        { status: 404 }
+        { error: "Erro ao buscar integração", details: integrationError.message },
+        { status: 500 }
       )
     }
 
     if (!integration) {
       return NextResponse.json(
-        { error: "Integração não encontrada" },
+        { error: "Integração não encontrada", status: "not_found" },
         { status: 404 }
       )
     }
