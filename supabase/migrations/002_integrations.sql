@@ -1,5 +1,6 @@
 -- Create integrations table to store WhatsApp, Telegram, etc. configurations
-CREATE TABLE integrations (
+-- Usa IF NOT EXISTS para tornar idempotente
+CREATE TABLE IF NOT EXISTS integrations (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   platform TEXT NOT NULL, -- 'whatsapp', 'telegram', 'webhook', etc.

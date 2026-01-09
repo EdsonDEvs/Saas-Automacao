@@ -19,7 +19,8 @@
 
 ```sql
 -- Create integrations table to store WhatsApp, Telegram, etc. configurations
-CREATE TABLE integrations (
+-- Usa IF NOT EXISTS para tornar idempotente (pode executar várias vezes)
+CREATE TABLE IF NOT EXISTS integrations (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   platform TEXT NOT NULL, -- 'whatsapp', 'telegram', 'webhook', etc.
@@ -69,9 +70,15 @@ CREATE TRIGGER update_integrations_updated_at
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ```
 
+## ⚠️ Se a Tabela Já Existe
+
+Se você receber o erro `relation "integrations" already exists`, significa que a tabela já foi criada mas faltam as políticas RLS ou triggers.
+
+**Solução:** Execute o arquivo `002_integrations_fix.sql` ao invés do `002_integrations.sql`. Ele só cria as políticas e triggers que faltam, sem tentar criar a tabela novamente.
+
 ## ✅ Verificação
 
-Após executar, você deve ver a mensagem de sucesso. A tabela `integrations` será criada e você poderá usar a página de configuração normalmente.
+Após executar, você deve ver a mensagem de sucesso. A tabela `integrations` será criada (ou as políticas/triggers serão adicionadas) e você poderá usar a página de configuração normalmente.
 
 ## 🔄 Após Executar
 
