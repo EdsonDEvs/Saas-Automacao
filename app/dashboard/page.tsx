@@ -1,0 +1,161 @@
+import { redirect } from "next/navigation"
+import { createClient } from "@/lib/supabase/server"
+import { Navbar } from "@/components/navbar"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import Link from "next/link"
+import { Bot, Package, Code, CheckCircle2, XCircle } from "lucide-react"
+
+export default async function DashboardPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect("/login")
+  }
+
+  // Fetch profile and agent config
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single()
+
+  const { data: agentConfig } = await supabase
+    .from("agent_configs")
+    .select("*")
+    .eq("user_id", user.id)
+    .single()
+
+  const { data: products } = await supabase
+    .from("products")
+    .select("id")
+    .eq("user_id", user.id)
+
+  const { data: apiKey } = await supabase
+    .from("api_keys")
+    .select("key, is_active")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .single()
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      <div className="container mx-auto p-6">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Bem-vindo, {profile?.business_name || "Usuário"}
+          </p>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bot className="h-5 w-5" />
+                Status do Agente
+              </CardTitle>
+              <CardDescription>Status atual do seu agente IA</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                {agentConfig?.is_active ? (
+                  <>
+                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    <span className="font-semibold text-green-500">Ativo</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-5 w-5 text-red-500" />
+                    <span className="font-semibold text-red-500">Inativo</span>
+                  </>
+                )}
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {agentConfig?.agent_name || "Sem nome"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Produtos
+              </CardTitle>
+              <CardDescription>Total de produtos cadastrados</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold">{products?.length || 0}</p>
+              <Link href="/products">
+                <Button variant="outline" className="mt-4 w-full">
+                  Gerenciar Produtos
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Code className="h-5 w-5" />
+                Integração
+              </CardTitle>
+              <CardDescription>Configurações de API</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {apiKey ? (
+                  <div className="rounded-md bg-muted p-2 text-xs font-mono">
+                    {apiKey.key.substring(0, 20)}...
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhuma chave ativa
+                  </p>
+                )}
+                <Link href="/integration">
+                  <Button variant="outline" className="mt-2 w-full">
+                    Ver Configurações
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Ações Rápidas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-3">
+                <Link href="/agent">
+                  <Button variant="outline" className="w-full">
+                    <Bot className="mr-2 h-4 w-4" />
+                    Configurar Agente
+                  </Button>
+                </Link>
+                <Link href="/products">
+                  <Button variant="outline" className="w-full">
+                    <Package className="mr-2 h-4 w-4" />
+                    Adicionar Produto
+                  </Button>
+                </Link>
+                <Link href="/integration">
+                  <Button variant="outline" className="w-full">
+                    <Code className="mr-2 h-4 w-4" />
+                    Ver API Key
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
