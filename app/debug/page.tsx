@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Navbar } from "@/components/navbar"
@@ -182,7 +182,7 @@ export default function DebugPage() {
         const webhookData = await checkResponse.json()
         toast({
           title: "Webhook Configurado",
-          description: `URL: ${webhookData.url || "Não encontrado"}`,
+          description: `URL: ${webhookData?.url || "Não encontrado"}`,
         })
       } else {
         toast({
@@ -340,13 +340,13 @@ export default function DebugPage() {
               <div>
                 <strong>URL do Webhook:</strong>
                 <code className="ml-2 px-2 py-1 bg-muted rounded">
-                  {typeof window !== "undefined" ? `${window.location.origin}/api/webhook/whatsapp` : ""}
+                  {webhookUrl || "Carregando..."}
                 </code>
               </div>
               <div>
                 <strong>Endpoint de Teste:</strong>
                 <code className="ml-2 px-2 py-1 bg-muted rounded">
-                  {typeof window !== "undefined" ? `${window.location.origin}/api/webhook/test` : ""}
+                  {testUrl || "Carregando..."}
                 </code>
               </div>
               
