@@ -47,9 +47,24 @@ export default function SignupPage() {
         router.refresh()
       }, 1000)
     } catch (error: any) {
+      let errorMessage = "Erro ao criar conta"
+      
+      // Tratamento de erros específicos do Supabase
+      if (error.message?.includes("already registered") || 
+          error.message?.includes("User already registered") ||
+          error.status === 422) {
+        errorMessage = "Este email já está cadastrado. Faça login ou use outro email."
+      } else if (error.message?.includes("Password")) {
+        errorMessage = "A senha deve ter pelo menos 6 caracteres."
+      } else if (error.message?.includes("Invalid email")) {
+        errorMessage = "Por favor, insira um email válido."
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+
       toast({
         title: "Erro",
-        description: error.message || "Erro ao criar conta",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {

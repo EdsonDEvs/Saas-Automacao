@@ -37,9 +37,23 @@ export default function LoginPage() {
       router.push("/dashboard")
       router.refresh()
     } catch (error: any) {
+      let errorMessage = "Erro ao fazer login"
+      
+      // Tratamento de erros específicos do Supabase
+      if (error.message?.includes("Invalid login credentials") ||
+          error.message?.includes("Invalid credentials")) {
+        errorMessage = "Email ou senha incorretos. Verifique suas credenciais."
+      } else if (error.message?.includes("Email not confirmed")) {
+        errorMessage = "Por favor, confirme seu email antes de fazer login."
+      } else if (error.message?.includes("User not found")) {
+        errorMessage = "Usuário não encontrado. Verifique o email ou cadastre-se."
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+
       toast({
         title: "Erro",
-        description: error.message || "Erro ao fazer login",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {

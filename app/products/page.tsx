@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
+import { ensureUserProfile } from "@/lib/supabase/ensure-profile"
 import { Plus, Edit, Trash2, Loader2, Package } from "lucide-react"
 
 type Product = {
@@ -106,11 +107,8 @@ export default function ProductsPage() {
     setSaving(true)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push("/login")
-        return
-      }
+      // Garante que o perfil existe antes de criar o produto
+      const user = await ensureUserProfile()
 
       const productData = {
         name: formData.name,
@@ -147,9 +145,20 @@ export default function ProductsPage() {
       setDialogOpen(false)
       loadProducts()
     } catch (error: any) {
+      let errorMessage = "Erro ao salvar produto"
+      
+      if (error.message?.includes("foreign key constraint")) {
+        errorMessage = "Erro: Perfil do usuário não encontrado. Tente fazer logout e login novamente."
+      } else if (error.message?.includes("Usuário não autenticado")) {
+        router.push("/login")
+        return
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+
       toast({
         title: "Erro",
-        description: error.message || "Erro ao salvar produto",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {

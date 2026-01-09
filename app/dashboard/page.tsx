@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { ensureUserProfileServer } from "@/lib/supabase/ensure-profile-server"
 import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,6 +13,13 @@ export default async function DashboardPage() {
 
   if (!user) {
     redirect("/login")
+  }
+
+  // Garante que o perfil existe
+  try {
+    await ensureUserProfileServer()
+  } catch (error) {
+    console.error("Erro ao garantir perfil:", error)
   }
 
   // Fetch profile and agent config

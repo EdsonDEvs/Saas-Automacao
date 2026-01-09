@@ -7,6 +7,7 @@ import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
+import { ensureUserProfile } from "@/lib/supabase/ensure-profile"
 import { Copy, RefreshCw, Loader2, Check } from "lucide-react"
 
 type ApiKey = {
@@ -30,6 +31,9 @@ export default function IntegrationPage() {
 
   const loadApiKey = async () => {
     try {
+      // Garante que o perfil existe
+      await ensureUserProfile()
+      
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         router.push("/login")

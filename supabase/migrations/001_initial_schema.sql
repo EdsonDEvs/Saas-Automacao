@@ -1,8 +1,15 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Drop enum if exists (only if you need to recreate it)
+-- DROP TYPE IF EXISTS agent_tone CASCADE;
+
 -- Create enum for agent tone
-CREATE TYPE agent_tone AS ENUM ('Formal', 'Friendly', 'Sales');
+DO $$ BEGIN
+  CREATE TYPE agent_tone AS ENUM ('Formal', 'Friendly', 'Sales');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
 -- Create profiles table (extends auth.users)
 CREATE TABLE profiles (
@@ -52,6 +59,21 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent_configs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can view own agent config" ON agent_configs;
+DROP POLICY IF EXISTS "Users can update own agent config" ON agent_configs;
+DROP POLICY IF EXISTS "Users can insert own agent config" ON agent_configs;
+DROP POLICY IF EXISTS "Users can view own products" ON products;
+DROP POLICY IF EXISTS "Users can insert own products" ON products;
+DROP POLICY IF EXISTS "Users can update own products" ON products;
+DROP POLICY IF EXISTS "Users can delete own products" ON products;
+DROP POLICY IF EXISTS "Users can view own api keys" ON api_keys;
+DROP POLICY IF EXISTS "Users can insert own api keys" ON api_keys;
+DROP POLICY IF EXISTS "Users can update own api keys" ON api_keys;
 
 -- RLS Policies for profiles
 CREATE POLICY "Users can view own profile"
@@ -126,6 +148,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Drop trigger if exists before creating
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
 -- Trigger to call the function on user creation
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
@@ -139,6 +164,11 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Drop triggers if exists before creating
+DROP TRIGGER IF EXISTS update_agent_configs_updated_at ON agent_configs;
+DROP TRIGGER IF EXISTS update_products_updated_at ON products;
+DROP TRIGGER IF EXISTS update_api_keys_updated_at ON api_keys;
 
 -- Triggers for updated_at
 CREATE TRIGGER update_agent_configs_updated_at
