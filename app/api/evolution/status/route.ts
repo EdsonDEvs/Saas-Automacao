@@ -24,13 +24,37 @@ export async function GET(request: NextRequest) {
     instanceName = decodeURIComponent(instanceName)
 
     // Busca configuração da integração
-    const { data: integration, error: integrationError } = await supabase
+    // Primeiro tenta buscar pela instância específica
+    let integration = await supabase
       .from("integrations")
       .select("webhook_url, api_key, instance_name")
       .eq("user_id", user.id)
       .eq("platform", "whatsapp")
       .eq("instance_name", instanceName)
       .maybeSingle()
+    
+    // Se não encontrou, busca qualquer integração WhatsApp do usuário
+    if (!integration.data) {
+      const { data: allIntegrations } = await supabase
+        .from("integrations")
+        .select("webhook_url, api_key, instance_name")
+        .eq("user_id", user.id)
+        .eq("platform", "whatsapp")
+        .limit(1)
+        .maybeSingle()
+      
+      if (allIntegrations) {
+        integration = { data: allIntegrations, error: null, count: null, status: 200, statusText: 'OK' }
+        // Se encontrou uma integração diferente, usa o nome dela
+        if (allIntegrations.instance_name && allIntegrations.instance_name !== instanceName) {
+          console.log(`[Status API] Usando instância diferente: ${allIntegrations.instance_name} (procurado: ${instanceName})`)
+          instanceName = allIntegrations.instance_name
+        }
+      }
+    }
+    
+    const integrationData = integration.data
+    const integrationError = integration.error
 
     if (integrationError) {
       console.error("Erro ao buscar integração:", integrationError)
@@ -40,7 +64,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    if (!integration) {
+    if (!integrationData) {
       return NextResponse.json(
         { error: "Integração não encontrada", status: "not_found" },
         { status: 404 }
@@ -48,7 +72,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Remove barra final da URL se existir
-    const cleanUrl = integration.webhook_url.replace(/\/$/, "")
+    const cleanUrl = integrationData.webhook_url.replace(/\/$/, "")
     
     // Verifica status na Evolution API
     let statusResponse = await fetch(
@@ -56,7 +80,7 @@ export async function GET(request: NextRequest) {
       {
         method: "GET",
         headers: {
-          "apikey": integration.api_key,
+          "apikey": integrationData.api_key,
         },
       }
     )
@@ -68,7 +92,7 @@ export async function GET(request: NextRequest) {
         {
           method: "GET",
           headers: {
-            "Authorization": `Bearer ${integration.api_key}`,
+            "Authorization": `Bearer ${integrationData.api_key}`,
           },
         }
       )
@@ -93,61 +117,325 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // Log para debug
+    console.log(`[Status API] Buscando instância: ${instanceName}`)
+    console.log(`[Status API] Resposta da Evolution API:`, JSON.stringify(instances, null, 2))
+
     // Pode retornar array ou objeto
-    const instancesArray = Array.isArray(instances) ? instances : (instances.data || [instances])
-    const instance = instancesArray.find((inst: any) => {
-      const name = inst.instance?.instanceName || inst.instanceName || inst.name
-      return name === instanceName
+    const instancesArray = Array.isArray(instances) ? instances : (instances.data || instances.instances || [instances])
+    
+    console.log(`[Status API] Total de instâncias encontradas: ${instancesArray.length}`)
+    
+    // Se só tem uma instância, usa ela automaticamente
+    if (instancesArray.length === 1) {
+      console.log(`[Status API] Apenas uma instância encontrada, usando automaticamente`)
+      const singleInstance = instancesArray[0]
+      const singleInstanceName = singleInstance.instance?.instanceName || singleInstance.instanceName || singleInstance.name || singleInstance.instance?.name
+      if (singleInstanceName && singleInstanceName !== instanceName) {
+        console.log(`[Status API] Nome da instância diferente: "${singleInstanceName}" (procurado: "${instanceName}")`)
+        // Atualiza o nome no banco se for diferente
+        await supabase
+          .from("integrations")
+          .update({ instance_name: singleInstanceName })
+          .eq("user_id", user.id)
+          .eq("platform", "whatsapp")
+        instanceName = singleInstanceName
+      }
+    }
+    
+    // Tenta encontrar a instância de diferentes formas
+    let instance = instancesArray.find((inst: any) => {
+      const name = inst.instance?.instanceName || inst.instanceName || inst.name || inst.instance?.name
+      console.log(`[Status API] Comparando: "${name}" === "${instanceName}"`)
+      return instanceName && (name === instanceName || name?.toLowerCase() === instanceName.toLowerCase())
     })
 
+    // Se não encontrou, tenta buscar sem case-sensitive
+    if (!instance && instanceName) {
+      const instanceNameLower = instanceName.toLowerCase()
+      instance = instancesArray.find((inst: any) => {
+        const name = inst.instance?.instanceName || inst.instanceName || inst.name || inst.instance?.name
+        return name?.toLowerCase() === instanceNameLower
+      })
+    }
+    
+    // Se ainda não encontrou e só tem uma instância, usa ela
+    if (!instance && instancesArray.length === 1) {
+      instance = instancesArray[0]
+      console.log(`[Status API] Usando única instância disponível`)
+    }
+    
+    // Se ainda não encontrou, tenta usar a primeira instância conectada
+    if (!instance && instancesArray.length > 0) {
+      console.log(`[Status API] Instância "${instanceName}" não encontrada, procurando primeira instância conectada`)
+      const connectedInstances = instancesArray.filter((inst: any) => {
+        const instData = inst.instance || inst
+        const instStatus = instData.status || instData.state || "unknown"
+        return instStatus === "open" || 
+               instStatus === "connected" || 
+               instStatus?.toLowerCase() === "open" ||
+               instStatus?.toLowerCase() === "connected"
+      })
+      
+      if (connectedInstances.length > 0) {
+        instance = connectedInstances[0]
+        const foundName = (instance.instance || instance).instanceName || (instance.instance || instance).name
+        console.log(`[Status API] Usando primeira instância conectada: "${foundName}"`)
+        
+        // Atualiza o nome da instância no banco
+        if (foundName && foundName !== instanceName) {
+          await supabase
+            .from("integrations")
+            .update({ instance_name: foundName })
+            .eq("user_id", user.id)
+            .eq("platform", "whatsapp")
+          instanceName = foundName
+        }
+      }
+    }
+    
+    // Se ainda não encontrou, usa a primeira instância disponível
+    if (!instance && instancesArray.length > 0) {
+      instance = instancesArray[0]
+      const foundName = (instance.instance || instance).instanceName || (instance.instance || instance).name
+      console.log(`[Status API] Usando primeira instância disponível: "${foundName}"`)
+      
+      // Atualiza o nome da instância no banco
+      if (foundName && foundName !== instanceName) {
+        await supabase
+          .from("integrations")
+          .update({ instance_name: foundName })
+          .eq("user_id", user.id)
+          .eq("platform", "whatsapp")
+        instanceName = foundName
+      }
+    }
+
     if (!instance) {
+      const availableNames = instancesArray.map((inst: any) => {
+        const instData = inst.instance || inst
+        return {
+          name: instData.instanceName || instData.name || "unknown",
+          status: instData.status || instData.state || "unknown"
+        }
+      })
+      console.error(`[Status API] Nenhuma instância encontrada. Instâncias disponíveis:`, availableNames)
       return NextResponse.json({
         connected: false,
         status: "not_found",
+        error: `Instância "${instanceName}" não encontrada na Evolution API`,
+        availableInstances: availableNames.map((inst: any) => inst.name),
+        allInstances: availableNames
       })
     }
 
-    const instanceData = instance.instance || instance
-    const isConnected = instanceData.status === "open" || instanceData.state === "open"
+    let instanceData = instance.instance || instance
+    console.log(`[Status API] Dados da instância (inicial):`, JSON.stringify(instanceData, null, 2))
+    
+    // Tenta buscar informações mais detalhadas da instância usando diferentes endpoints
+    const detailEndpoints = [
+      `/instance/connectionState/${instanceName}`,
+      `/instance/fetchInstance/${instanceName}`,
+      `/instance/status/${instanceName}`,
+    ]
+    
+    for (const endpoint of detailEndpoints) {
+      try {
+        const detailResponse = await fetch(
+          `${cleanUrl}${endpoint}`,
+          {
+            method: "GET",
+            headers: {
+              "apikey": integrationData.api_key,
+            },
+          }
+        )
+        
+        if (detailResponse.ok) {
+          const detailData = await detailResponse.json()
+          console.log(`[Status API] Dados detalhados de ${endpoint}:`, JSON.stringify(detailData, null, 2))
+          // Mescla os dados detalhados com os dados iniciais
+          instanceData = { ...instanceData, ...detailData }
+          break // Se encontrou, para de tentar outros endpoints
+        }
+      } catch (error) {
+        // Continua tentando outros endpoints
+      }
+    }
+    
+    // Busca o número real da instância (pode estar em diferentes campos)
+    const phoneNumber = instanceData.phoneNumber || 
+                       instanceData.phone || 
+                       instanceData.number ||
+                       instanceData.owner ||
+                       instanceData.ownerNumber ||
+                       instanceData.wid?.user || // WhatsApp ID format
+                       instanceData.wid?.split('@')[0] || // Extrai número do JID
+                       null
+    
+    // Verifica diferentes valores que indicam conexão
+    const status = instanceData.status || instanceData.state || instanceData.connectionState || "unknown"
+    const state = instanceData.state || instanceData.connectionState || status
+    
+    // Verifica se está conectado de várias formas
+    // Primeiro verifica estados explícitos de conexão
+    const isExplicitlyConnected = 
+      status === "open" || 
+      status === "connected" || 
+      status === "CONNECTED" ||
+      status?.toLowerCase() === "open" ||
+      status?.toLowerCase() === "connected" ||
+      state === "open" ||
+      state === "connected" ||
+      state === "CONNECTED" ||
+      state?.toLowerCase() === "open" ||
+      state?.toLowerCase() === "connected"
+    
+    // Se não tem status explícito, verifica outros indicadores
+    const hasQrcode = !!(instanceData.qrcode || instanceData.base64 || instanceData.qr)
+    const isExplicitlyDisconnected = 
+      status === "close" || 
+      status === "closed" || 
+      status === "CLOSED" ||
+      status === "disconnected" ||
+      status === "DISCONNECTED" ||
+      state === "close" ||
+      state === "closed" ||
+      state === "disconnected"
+    
+    // Se não tem QR code e não está explicitamente desconectado, provavelmente está conectado
+    const hasConnectionIndicators = 
+      phoneNumber !== null || // Se tem número, provavelmente está conectado
+      (!hasQrcode && !isExplicitlyDisconnected) // Sem QR code e não está fechado = já foi escaneado
+    
+    // Considera conectado se:
+    // 1. Status explícito de conexão OU
+    // 2. Status unknown mas tem indicadores de conexão (sem QR code = já escaneou)
+    const isConnected = isExplicitlyConnected || (status === "unknown" && hasConnectionIndicators && !hasQrcode)
+    
+    console.log(`[Status API] Análise de conexão:`, {
+      isExplicitlyConnected,
+      hasQrcode,
+      isExplicitlyDisconnected,
+      hasConnectionIndicators,
+      phoneNumber,
+      finalIsConnected: isConnected
+    })
+    
+    console.log(`[Status API] Status: ${status}, State: ${state}, Conectado: ${isConnected}, Número: ${phoneNumber}`)
+    console.log(`[Status API] Dados completos da instância:`, {
+      status: instanceData.status,
+      state: instanceData.state,
+      connectionState: instanceData.connectionState,
+      hasQrcode: !!instanceData.qrcode,
+      phoneNumber: phoneNumber,
+      allFields: Object.keys(instanceData)
+    })
 
-    // Atualiza status no banco e configura webhook automaticamente
+    // Atualiza status e número no banco quando conectado
     if (isConnected) {
+      const updateData: any = { is_active: true }
+      
+      // Atualiza o número se encontrou um diferente
+      if (phoneNumber) {
+        updateData.phone_number = phoneNumber
+        console.log(`[Status API] Atualizando número no banco: ${phoneNumber}`)
+      }
+      
       await supabase
         .from("integrations")
-        .update({ is_active: true })
+        .update(updateData)
         .eq("user_id", user.id)
         .eq("platform", "whatsapp")
 
       // Configura webhook automaticamente
+      if (instanceName) {
+        try {
+          // Tenta obter a URL base de várias fontes
+          let baseUrl = process.env.NEXT_PUBLIC_APP_URL
+          if (!baseUrl && process.env.VERCEL_URL) {
+            baseUrl = `https://${process.env.VERCEL_URL}`
+          }
+          if (!baseUrl) {
+            baseUrl = request.headers.get('origin') || 
+                     (request.headers.get('host') ? `https://${request.headers.get('host')}` : null) ||
+                     'https://seu-dominio.com'
+          }
+          const webhookUrl = `${baseUrl}/api/webhook/whatsapp`
+          
+          console.log(`[Status API] 🔧 Configurando webhook automaticamente...`)
+          console.log(`[Status API] URL do webhook: ${webhookUrl}`)
+          console.log(`[Status API] Instância: ${instanceName}`)
+          console.log(`[Status API] Evolution API URL: ${integrationData.webhook_url}`)
+          
+          const webhookResponse = await fetch(
+            `${integrationData.webhook_url}/webhook/set/${instanceName}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "apikey": integrationData.api_key,
+              },
+              body: JSON.stringify({
+                url: webhookUrl,
+                webhook_by_events: false,
+                webhook_base64: false,
+                events: [
+                  "MESSAGES_UPSERT",
+                  "MESSAGES_UPDATE",
+                  "MESSAGES_DELETE",
+                  "SEND_MESSAGE",
+                  "CONNECTION_UPDATE",
+                  "QRCODE_UPDATED",
+                ],
+              }),
+            }
+          )
+          
+          if (webhookResponse.ok) {
+            const webhookData = await webhookResponse.json().catch(() => ({}))
+            console.log(`[Status API] ✅ Webhook configurado com sucesso!`)
+            console.log(`[Status API] Resposta:`, JSON.stringify(webhookData, null, 2))
+          } else {
+            const errorText = await webhookResponse.text().catch(() => "")
+            console.error(`[Status API] ❌ Erro ao configurar webhook: Status ${webhookResponse.status}`)
+            console.error(`[Status API] Erro:`, errorText)
+          }
+        } catch (error: any) {
+          console.error(`[Status API] ❌ Erro ao configurar webhook automaticamente:`, error)
+          console.error(`[Status API] Detalhes:`, error.message)
+          // Não falha se não conseguir configurar webhook
+        }
+      }
+    }
+
+    // Verifica se webhook está configurado
+    let webhookConfigured = false
+    let webhookUrl = null
+    if (instanceName && isConnected) {
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.headers.get('origin') || 'https://seu-dominio.com'
-        const webhookUrl = `${baseUrl}/api/webhook/whatsapp`
-        await fetch(
-          `${integration.webhook_url}/webhook/set/${instanceName}`,
+        const cleanUrl = integrationData.webhook_url.replace(/\/$/, "")
+        const checkResponse = await fetch(
+          `${cleanUrl}/webhook/find/${instanceName}`,
           {
-            method: "POST",
+            method: "GET",
             headers: {
-              "Content-Type": "application/json",
-              "apikey": integration.api_key,
+              "apikey": integrationData.api_key,
             },
-            body: JSON.stringify({
-              url: webhookUrl,
-              webhook_by_events: false,
-              webhook_base64: false,
-              events: [
-                "MESSAGES_UPSERT",
-                "MESSAGES_UPDATE",
-                "MESSAGES_DELETE",
-                "SEND_MESSAGE",
-                "CONNECTION_UPDATE",
-                "QRCODE_UPDATED",
-              ],
-            }),
           }
         )
+        
+        if (checkResponse.ok) {
+          const webhookData = await checkResponse.json().catch(() => ({}))
+          webhookUrl = webhookData?.url || webhookData?.webhook?.url || null
+          webhookConfigured = !!webhookUrl
+          console.log(`[Status API] Webhook verificado: ${webhookConfigured ? "✅ Configurado" : "❌ Não configurado"}`)
+          if (webhookUrl) {
+            console.log(`[Status API] URL do webhook: ${webhookUrl}`)
+          }
+        }
       } catch (error) {
-        console.error("Erro ao configurar webhook automaticamente:", error)
-        // Não falha se não conseguir configurar webhook
+        console.error(`[Status API] Erro ao verificar webhook:`, error)
       }
     }
 
@@ -155,6 +443,15 @@ export async function GET(request: NextRequest) {
       connected: isConnected,
       status: instanceData.status || instanceData.state || "unknown",
       qrcode: instanceData.qrcode?.base64 || instanceData.qrcode || null,
+      phoneNumber: phoneNumber,
+      webhookConfigured: webhookConfigured,
+      webhookUrl: webhookUrl,
+      instanceData: {
+        status: instanceData.status,
+        state: instanceData.state,
+        instanceName: instanceData.instanceName || instanceName,
+        phoneNumber: phoneNumber,
+      }
     })
   } catch (error: any) {
     console.error("Erro ao verificar status:", error)

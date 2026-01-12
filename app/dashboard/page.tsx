@@ -5,7 +5,8 @@ import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { Bot, Package, Code, CheckCircle2, XCircle } from "lucide-react"
+import { Bot, Package, Code, CheckCircle2, XCircle, MessageCircle } from "lucide-react"
+import { WhatsAppStatusCard } from "@/components/whatsapp-status-card"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -47,6 +48,14 @@ export default async function DashboardPage() {
     .eq("is_active", true)
     .single()
 
+  // Busca integração WhatsApp
+  const { data: whatsappIntegration } = await supabase
+    .from("integrations")
+    .select("instance_name, is_active, phone_number")
+    .eq("user_id", user.id)
+    .eq("platform", "whatsapp")
+    .maybeSingle()
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -59,6 +68,39 @@ export default async function DashboardPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5" />
+                Status do WhatsApp
+              </CardTitle>
+              <CardDescription>Status da conexão do WhatsApp</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {whatsappIntegration ? (
+                <WhatsAppStatusCard 
+                  instanceName={whatsappIntegration.instance_name || ""}
+                  phoneNumber={whatsappIntegration.phone_number || ""}
+                />
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <XCircle className="h-5 w-5 text-gray-400" />
+                    <span className="font-semibold text-gray-400">Não Configurado</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Configure o WhatsApp em Configurações
+                  </p>
+                  <Link href="/setup">
+                    <Button variant="outline" className="mt-2 w-full" size="sm">
+                      Configurar WhatsApp
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

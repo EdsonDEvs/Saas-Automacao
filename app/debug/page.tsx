@@ -190,14 +190,26 @@ export default function DebugPage() {
 
       if (checkResponse.ok) {
         const webhookData = await checkResponse.json()
-        toast({
-          title: "Webhook Configurado",
-          description: `URL: ${webhookData?.url || "Não encontrado"}`,
-        })
+        const configuredUrl = webhookData?.url || webhookData?.webhook?.url || "Não encontrado"
+        const expectedUrl = currentWebhookUrl
+        
+        if (configuredUrl === expectedUrl || configuredUrl.includes(window.location.hostname)) {
+          toast({
+            title: "✅ Webhook Configurado",
+            description: `URL configurada: ${configuredUrl}`,
+          })
+        } else {
+          toast({
+            title: "⚠️ Webhook com URL Diferente",
+            description: `Configurado: ${configuredUrl}\nEsperado: ${expectedUrl}`,
+            variant: "destructive",
+          })
+        }
       } else {
+        const errorText = await checkResponse.text().catch(() => "")
         toast({
-          title: "Atenção",
-          description: "Webhook não encontrado na Evolution API. Configure manualmente.",
+          title: "❌ Webhook Não Configurado",
+          description: "Webhook não encontrado na Evolution API. Clique em 'Configurar Webhook' para configurar automaticamente.",
           variant: "destructive",
         })
       }
@@ -329,15 +341,82 @@ export default function DebugPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Verificar Configuração</CardTitle>
+              <CardTitle>Verificar e Configurar Webhook</CardTitle>
               <CardDescription>
-                Verifica se o webhook está configurado na Evolution API
+                Verifica se o webhook está configurado e permite configurar automaticamente
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <Button onClick={checkWebhookConfig} variant="outline" className="w-full">
                 <AlertCircle className="mr-2 h-4 w-4" />
                 Verificar Webhook na Evolution API
+              </Button>
+              <Button 
+                onClick={async () => {
+                  try {
+                    await ensureUserProfile()
+                    const { data: { user } } = await supabase.auth.getUser()
+                    if (!user) {
+                      toast({
+                        title: "Erro",
+                        description: "Não autenticado",
+                        variant: "destructive",
+                      })
+                      return
+                    }
+
+                    const { data: integration } = await supabase
+                      .from("integrations")
+                      .select("instance_name")
+                      .eq("user_id", user.id)
+                      .eq("platform", "whatsapp")
+                      .eq("is_active", true)
+                      .maybeSingle()
+
+                    if (!integration || !integration.instance_name) {
+                      toast({
+                        title: "Erro",
+                        description: "Integração não encontrada",
+                        variant: "destructive",
+                      })
+                      return
+                    }
+
+                    const response = await fetch("/api/evolution/set-webhook", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        instanceName: integration.instance_name,
+                      }),
+                    })
+
+                    const data = await response.json()
+                    if (response.ok) {
+                      toast({
+                        title: "✅ Sucesso!",
+                        description: `Webhook configurado: ${data.webhookUrl}`,
+                      })
+                    } else {
+                      toast({
+                        title: "❌ Erro",
+                        description: data.error || "Erro ao configurar webhook",
+                        variant: "destructive",
+                      })
+                    }
+                  } catch (error: any) {
+                    toast({
+                      title: "Erro",
+                      description: error.message,
+                      variant: "destructive",
+                    })
+                  }
+                }}
+                className="w-full"
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Configurar Webhook Automaticamente
               </Button>
             </CardContent>
           </Card>
