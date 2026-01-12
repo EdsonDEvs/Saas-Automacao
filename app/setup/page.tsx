@@ -90,12 +90,15 @@ export default function SetupPage() {
         }
       }
 
+      // Remove platform do integration para evitar duplicação
+      const { platform: _, ...integrationWithoutPlatform } = integration as any
+      
       const { error, data } = await supabase
         .from("integrations")
         .upsert({
           user_id: user.id,
           platform: platform,
-          ...integration,
+          ...integrationWithoutPlatform,
           is_active: integration.is_active ?? true,
         }, {
           onConflict: "user_id,platform"

@@ -100,7 +100,7 @@ export async function POST(
       // Tenta encontrar pela instância primeiro
       const { data: integrationByInstance, error: instanceError } = await supabase
         .from("integrations")
-        .select("user_id, webhook_url, api_key, instance_name")
+        .select("user_id, webhook_url, api_key, instance_name, bot_token")
         .eq("platform", platform)
         .eq("instance_name", instanceName)
         .eq("is_active", true)
@@ -122,7 +122,7 @@ export async function POST(
       console.log(`[Webhook ${platform}] 🔍 Buscando primeira integração ativa...`)
       const { data: integrations, error: integrationsError } = await supabase
         .from("integrations")
-        .select("user_id, webhook_url, api_key, instance_name")
+        .select("user_id, webhook_url, api_key, instance_name, bot_token")
         .eq("platform", platform)
         .eq("is_active", true)
         .limit(1)
@@ -365,10 +365,11 @@ export async function POST(
           sendError = `Erro ao enviar resposta: ${error.message}`
           console.error("[Webhook WhatsApp] Erro ao enviar resposta:", error.message, error)
         }
-    } else if (platform === "telegram" && integration.bot_token) {
+    } else if (platform === "telegram" && (integration as any).bot_token) {
       try {
         // Envia mensagem via Telegram API
-        await fetch(`https://api.telegram.org/bot${integration.bot_token}/sendMessage`, {
+        const botToken = (integration as any).bot_token
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
