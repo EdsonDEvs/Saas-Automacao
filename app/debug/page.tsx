@@ -223,14 +223,14 @@ export default function DebugPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Debug - Webhook WhatsApp</h1>
-          <p className="text-muted-foreground">
-            Ferramentas para testar e debugar o webhook
-          </p>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Debug - Webhook WhatsApp</h1>
+        <p className="text-muted-foreground">
+          Ferramentas para testar e debugar o webhook
+        </p>
+      </div>
 
-        <div className="space-y-6">
+      <div className="space-y-6">
           {/* Card informativo quando não há integração */}
           {result && result.error && result.error.includes("Nenhuma integração") && (
             <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
