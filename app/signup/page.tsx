@@ -34,18 +34,53 @@ export default function SignupPage() {
         },
       })
 
-      if (error) throw error
+      if (error) {
+        console.error("Erro no signup:", error)
+        throw error
+      }
+
+      // Verifica se o usuário foi criado
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        throw new Error("Erro ao criar usuário. Tente novamente.")
+      }
 
       toast({
         title: "Sucesso!",
         description: "Conta criada com sucesso. Redirecionando...",
       })
       
-      // Wait a bit for the trigger to create profile
-      setTimeout(() => {
-        router.push("/dashboard")
-        router.refresh()
-      }, 1000)
+      // Espera um pouco mais para o trigger criar o perfil
+      // E tenta garantir que o perfil existe antes de redirecionar
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // Verifica se o perfil foi criado, se não, tenta criar manualmente
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .single()
+
+      if (profileError || !profile) {
+        console.warn("Perfil não criado pelo trigger, criando manualmente...")
+        // Tenta criar o perfil manualmente
+        const profileBusinessName = user.user_metadata?.business_name || businessName || "Minha Empresa"
+        const { error: insertError } = await supabase
+          .from("profiles")
+          .insert({
+            id: user.id,
+            business_name: profileBusinessName,
+            phone_number: null,
+          })
+
+        if (insertError) {
+          console.error("Erro ao criar perfil manualmente:", insertError)
+        }
+      }
+      
+      router.push("/dashboard")
+      router.refresh()
     } catch (error: any) {
       let errorMessage = "Erro ao criar conta"
       

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { generateAIResponse } from "@/lib/ai/openai"
+import { detectAppointmentIntent } from "@/lib/ai/appointment-detector"
+import { detectAppointmentIntent } from "@/lib/ai/appointment-detector"
 
 export async function POST(
   request: NextRequest,
@@ -250,24 +252,85 @@ export async function POST(
       }
 
       console.log(`[Webhook ${platform}] ✅ Contexto obtido com sucesso para agente: ${context.agent.name}`)
-      console.log(`[Webhook ${platform}] 🤖 Gerando resposta com IA...`)
+      
+      // Detecta se há intenção de agendamento
+      const appointmentIntent = detectAppointmentIntent(userMessage, fromNumber)
+      console.log(`[Webhook ${platform}] 📅 Intenção de agendamento:`, appointmentIntent)
 
-      // Gera resposta com IA
-      const openaiKey = process.env.OPENAI_API_KEY
-      if (!openaiKey) {
-        console.error(`[Webhook ${platform}] ❌ OPENAI_API_KEY não configurada`)
-        return NextResponse.json(
-          { error: "Configuração de IA não encontrada" },
-          { status: 500 }
-        )
+      let aiResponse: string
+
+      // Se detectou intenção de agendamento, busca horários disponíveis
+      if (appointmentIntent.hasIntent) {
+        try {
+          const date = appointmentIntent.date || new Date().toISOString().split('T')[0]
+          const slotsResponse = await fetch(
+            `${request.nextUrl.origin}/api/appointments/available-slots?date=${date}&duration=60`,
+            {
+              headers: {
+                'Cookie': request.headers.get('cookie') || '',
+              }
+            }
+          )
+
+          if (slotsResponse.ok) {
+            const slotsData = await slotsResponse.json()
+            const availableSlots = slotsData.availableSlots || []
+
+            if (availableSlots.length > 0) {
+              // Formata os horários disponíveis
+              const formattedSlots = availableSlots.slice(0, 5).map((slot: string) => {
+                const date = new Date(slot)
+                return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+              }).join(', ')
+
+              aiResponse = `Ótimo! Vejo que você quer agendar. Aqui estão os horários disponíveis para ${new Date(date).toLocaleDateString('pt-BR')}:\n\n${formattedSlots}\n\nQual horário você prefere?`
+            } else {
+              aiResponse = `Desculpe, não há horários disponíveis para ${new Date(date).toLocaleDateString('pt-BR')}. Gostaria de verificar outro dia?`
+            }
+          } else {
+            // Se não conseguir buscar horários, usa IA normal
+            const openaiKey = process.env.OPENAI_API_KEY
+            aiResponse = await generateAIResponse(
+              `O cliente quer agendar. Mensagem: ${userMessage}. Responda de forma amigável oferecendo ajuda para agendar.`,
+              {
+                agentName: context.agent.name || "Assistente",
+                persona: context.agent.persona || "",
+                tone: context.agent.tone || "amigavel",
+                inventory: context.inventory_text || "",
+              },
+              openaiKey
+            )
+          }
+        } catch (error) {
+          console.error(`[Webhook ${platform}] Erro ao buscar horários:`, error)
+          // Fallback para resposta normal
+          const openaiKey = process.env.OPENAI_API_KEY
+          aiResponse = await generateAIResponse(userMessage, {
+            agentName: context.agent.name || "Assistente",
+            persona: context.agent.persona || "",
+            tone: context.agent.tone || "amigavel",
+            inventory: context.inventory_text || "",
+          }, openaiKey)
+        }
+      } else {
+        // Resposta normal com IA
+        console.log(`[Webhook ${platform}] 🤖 Gerando resposta com IA...`)
+        const openaiKey = process.env.OPENAI_API_KEY
+        if (!openaiKey) {
+          console.error(`[Webhook ${platform}] ❌ OPENAI_API_KEY não configurada`)
+          return NextResponse.json(
+            { error: "Configuração de IA não encontrada" },
+            { status: 500 }
+          )
+        }
+
+        aiResponse = await generateAIResponse(userMessage, {
+          agentName: context.agent.name || "Assistente",
+          persona: context.agent.persona || "",
+          tone: context.agent.tone || "amigavel",
+          inventory: context.inventory_text || "",
+        }, openaiKey)
       }
-
-      const aiResponse = await generateAIResponse(userMessage, {
-        agentName: context.agent.name || "Assistente",
-        persona: context.agent.persona || "",
-        tone: context.agent.tone || "amigavel",
-        inventory: context.inventory_text || "",
-      }, openaiKey)
 
       // Envia resposta de volta para a plataforma
       let sendError: string | null = null
