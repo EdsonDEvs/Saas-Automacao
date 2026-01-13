@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { generateAIResponse } from "@/lib/ai/openai"
 import { detectAppointmentIntent } from "@/lib/ai/appointment-detector"
-import { detectAppointmentIntent } from "@/lib/ai/appointment-detector"
 
 export async function POST(
   request: NextRequest,

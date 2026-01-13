@@ -80,7 +80,7 @@ function generateSlots(
   const timezone = settings.timezone || "America/Sao_Paulo"
   
   // Verifica se o dia está nos dias disponíveis
-  const dayOfWeek = new Date(date).toLocaleDateString("en-US", { weekday: "lowercase" })
+  const dayOfWeek = new Date(date).toLocaleDateString("en-US", { weekday: "long" }).toLowerCase()
   if (!settings.available_days.includes(dayOfWeek)) {
     return []
   }

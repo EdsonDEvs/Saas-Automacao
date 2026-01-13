@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Calendar, CheckCircle2, XCircle, Loader2 } from "lucide-react"
 import { useSearchParams } from "next/navigation"
 
-export default function AppointmentSettingsPage() {
+function AppointmentSettingsContent() {
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false)
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState(false)
@@ -49,7 +49,7 @@ export default function AppointmentSettingsPage() {
         variant: "destructive",
       })
     }
-  }, [searchParams])
+  }, [searchParams, toast])
 
   const checkGoogleCalendar = async () => {
     try {
@@ -313,5 +313,20 @@ export default function AppointmentSettingsPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function AppointmentSettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">Carregando...</div>
+        </div>
+      </div>
+    }>
+      <AppointmentSettingsContent />
+    </Suspense>
   )
 }
