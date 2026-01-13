@@ -135,23 +135,22 @@ export default function IntegrationPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     )
   }
 
   return (
     <div className="max-w-4xl">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Integração API</h1>
-          <p className="text-muted-foreground">
-            Configure sua integração com n8n, Typebot ou outras ferramentas
-          </p>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Integração API</h1>
+        <p className="text-muted-foreground">
+          Configure sua integração com n8n, Typebot ou outras ferramentas
+        </p>
+      </div>
 
-        <div className="space-y-6">
-          <Card>
+      <div className="space-y-6">
+        <Card>
             <CardHeader>
               <CardTitle>API Key</CardTitle>
               <CardDescription>
@@ -203,7 +202,7 @@ export default function IntegrationPage() {
             </CardContent>
           </Card>
 
-          <Card>
+        <Card>
             <CardHeader>
               <CardTitle>Endpoint URL</CardTitle>
               <CardDescription>
@@ -232,7 +231,7 @@ export default function IntegrationPage() {
             </CardContent>
           </Card>
 
-          <Card>
+        <Card>
             <CardHeader>
               <CardTitle>Documentação</CardTitle>
               <CardDescription>
@@ -294,7 +293,7 @@ export default function IntegrationPage() {
             </CardContent>
           </Card>
 
-          <Card>
+        <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Download className="h-5 w-5" />
@@ -389,8 +388,7 @@ export default function IntegrationPage() {
                 </p>
               </div>
             </CardContent>
-          </Card>
-        </div>
+        </Card>
       </div>
     </div>
   )
