@@ -193,15 +193,14 @@ export default function ProductsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     )
   }
 
   return (
     <div>
-        <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Produtos</h1>
             <p className="text-muted-foreground">
