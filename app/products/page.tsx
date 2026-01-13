@@ -208,13 +208,13 @@ export default function ProductsPage() {
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
+          <DialogTrigger asChild>
               <Button onClick={() => handleOpenDialog()}>
                 <Plus className="mr-2 h-4 w-4" />
                 Adicionar Produto
               </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>
                   {editingProduct ? "Editar Produto" : "Novo Produto"}
@@ -311,21 +311,21 @@ export default function ProductsPage() {
                   </Button>
                 </DialogFooter>
               </form>
-            </DialogContent>
+          </DialogContent>
         </Dialog>
       </div>
 
       {products.length === 0 ? (
-          <Card>
+        <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Package className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">
                 Nenhum produto cadastrado ainda.
               </p>
             </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {products.map((product) => (
               <Card key={product.id}>
                 <CardHeader>
@@ -377,9 +377,9 @@ export default function ProductsPage() {
                 </CardContent>
               </Card>
             ))}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
+    </div>
     </div>
   )
 }
