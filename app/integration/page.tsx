@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
@@ -135,9 +134,7 @@ export default function IntegrationPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <div className="container mx-auto p-6 flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-[50vh]">
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       </div>
@@ -145,9 +142,7 @@ export default function IntegrationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <div className="container mx-auto p-6 max-w-4xl">
+    <div className="max-w-4xl">
         <div className="mb-6">
           <h1 className="text-3xl font-bold">Integração API</h1>
           <p className="text-muted-foreground">

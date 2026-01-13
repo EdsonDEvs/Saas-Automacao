@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { ensureUserProfileServer } from "@/lib/supabase/ensure-profile-server"
-import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -57,9 +56,7 @@ export default async function DashboardPage() {
     .maybeSingle()
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <div className="container mx-auto p-6">
+    <div>
         <div className="mb-6">
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">
@@ -211,7 +208,6 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
     </div>
   )
 }

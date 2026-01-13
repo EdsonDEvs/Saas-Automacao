@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -693,18 +692,16 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <div className="container mx-auto p-6 max-w-3xl">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Configuração Guiada</h1>
-          <p className="text-muted-foreground">
-            Configure sua integração passo a passo de forma simples
-          </p>
-        </div>
+    <div className="max-w-3xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Configuração Guiada</h1>
+        <p className="text-muted-foreground">
+          Configure sua integração passo a passo de forma simples
+        </p>
+      </div>
 
-        <Card>
-          <CardHeader>
+      <Card>
+        <CardHeader>
             <div className="flex items-center justify-between mb-4">
               <CardTitle>Passo {step} de 4</CardTitle>
               <div className="flex gap-2">
@@ -763,7 +760,6 @@ export default function SetupPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
     </div>
   )
 }

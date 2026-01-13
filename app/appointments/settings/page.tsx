@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -167,9 +166,7 @@ function AppointmentSettingsContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <div className="container mx-auto px-4 py-8">
+      <div className="flex items-center justify-center min-h-[50vh]">
           <div className="text-center">Carregando...</div>
         </div>
       </div>
@@ -177,9 +174,7 @@ function AppointmentSettingsContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <div className="container mx-auto px-4 py-8">
+    <div>
         <h1 className="text-3xl font-bold mb-6">Configurações de Agendamento</h1>
 
         {/* Google Calendar */}
@@ -319,9 +314,7 @@ function AppointmentSettingsContent() {
 export default function AppointmentSettingsPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <div className="container mx-auto px-4 py-8">
+      <div className="flex items-center justify-center min-h-[50vh]">
           <div className="text-center">Carregando...</div>
         </div>
       </div>
