@@ -201,13 +201,13 @@ export default function ProductsPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Produtos</h1>
-            <p className="text-muted-foreground">
-              Gerencie seu catálogo de produtos
-            </p>
-          </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <div>
+          <h1 className="text-3xl font-bold">Produtos</h1>
+          <p className="text-muted-foreground">
+            Gerencie seu catálogo de produtos
+          </p>
+        </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => handleOpenDialog()}>
                 <Plus className="mr-2 h-4 w-4" />
@@ -312,10 +312,10 @@ export default function ProductsPage() {
                 </DialogFooter>
               </form>
             </DialogContent>
-          </Dialog>
-        </div>
+        </Dialog>
+      </div>
 
-        {products.length === 0 ? (
+      {products.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Package className="h-12 w-12 text-muted-foreground mb-4" />
