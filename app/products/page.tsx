@@ -47,10 +47,6 @@ export default function ProductsPage() {
   const { toast } = useToast()
   const supabase = createClient()
 
-  useEffect(() => {
-    loadProducts()
-  }, [])
-
   const loadProducts = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -77,6 +73,10 @@ export default function ProductsPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    loadProducts()
+  }, [])
 
   const handleOpenDialog = (product?: Product) => {
     if (product) {
@@ -209,21 +209,21 @@ export default function ProductsPage() {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-              <Button onClick={() => handleOpenDialog()}>
+            <Button onClick={() => handleOpenDialog()}>
                 <Plus className="mr-2 h-4 w-4" />
                 Adicionar Produto
               </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
-              <DialogHeader>
+            <DialogHeader>
                 <DialogTitle>
                   {editingProduct ? "Editar Produto" : "Novo Produto"}
                 </DialogTitle>
                 <DialogDescription>
                   Preencha as informações do produto
                 </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSave}>
+            </DialogHeader>
+            <form onSubmit={handleSave}>
                 <div className="grid gap-4 py-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Nome</Label>
@@ -310,23 +310,23 @@ export default function ProductsPage() {
                     )}
                   </Button>
                 </DialogFooter>
-              </form>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
 
       {products.length === 0 ? (
         <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
+          <CardContent className="flex flex-col items-center justify-center py-12">
               <Package className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">
                 Nenhum produto cadastrado ainda.
               </p>
-            </CardContent>
+          </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {products.map((product) => (
+          {products.map((product) => (
               <Card key={product.id}>
                 <CardHeader>
                   <CardTitle className="flex items-start justify-between">
@@ -376,10 +376,9 @@ export default function ProductsPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+          ))}
         </div>
       )}
-    </div>
     </div>
   )
 }

@@ -133,22 +133,21 @@ export default function AgentPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     )
   }
 
   return (
     <div className="max-w-4xl">
-        <div className="mb-6">
+      <div className="mb-6">
           <h1 className="text-3xl font-bold">Configuração do Agente IA</h1>
           <p className="text-muted-foreground">
             Defina a persona e comportamento do seu agente
           </p>
-        </div>
+      </div>
 
-        <Card>
+      <Card>
           <CardHeader>
             <CardTitle>Persona do Agente</CardTitle>
             <CardDescription>
@@ -222,8 +221,7 @@ export default function AgentPage() {
               </Button>
             </form>
           </CardContent>
-        </Card>
-      </div>
+      </Card>
     </div>
   )
 }

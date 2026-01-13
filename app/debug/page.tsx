@@ -231,10 +231,10 @@ export default function DebugPage() {
       </div>
 
       <div className="space-y-6">
-          {/* Card informativo quando não há integração */}
-          {result && result.error && result.error.includes("Nenhuma integração") && (
-            <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
-              <CardHeader>
+        {/* Card informativo quando não há integração */}
+        {result && result.error && result.error.includes("Nenhuma integração") && (
+          <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+            <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   Configure uma Integração Primeiro
@@ -260,18 +260,18 @@ export default function DebugPage() {
                   <li>Configurar webhook automaticamente</li>
                   <li>Escanear QR Code para autenticação</li>
                 </ul>
-              </CardContent>
-            </Card>
-          )}
+            </CardContent>
+          </Card>
+        )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Testar Webhook</CardTitle>
-              <CardDescription>
-                Envia uma mensagem de teste para verificar se o webhook está funcionando
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Testar Webhook</CardTitle>
+            <CardDescription>
+              Envia uma mensagem de teste para verificar se o webhook está funcionando
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="testMessage">Mensagem de Teste</Label>
                 <Input
@@ -333,23 +333,23 @@ export default function DebugPage() {
                   </details>
                 </div>
               )}
-            </CardContent>
-          </Card>
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Verificar e Configurar Webhook</CardTitle>
-              <CardDescription>
-                Verifica se o webhook está configurado e permite configurar automaticamente
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button onClick={checkWebhookConfig} variant="outline" className="w-full">
+        <Card>
+          <CardHeader>
+            <CardTitle>Verificar e Configurar Webhook</CardTitle>
+            <CardDescription>
+              Verifica se o webhook está configurado e permite configurar automaticamente
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button onClick={checkWebhookConfig} variant="outline" className="w-full">
                 <AlertCircle className="mr-2 h-4 w-4" />
-                Verificar Webhook na Evolution API
-              </Button>
-              <Button 
-                onClick={async () => {
+              Verificar Webhook na Evolution API
+            </Button>
+            <Button 
+              onClick={async () => {
                   try {
                     await ensureUserProfile()
                     const { data: { user } } = await supabase.auth.getUser()
@@ -413,16 +413,16 @@ export default function DebugPage() {
                 className="w-full"
               >
                 <Settings className="mr-2 h-4 w-4" />
-                Configurar Webhook Automaticamente
-              </Button>
-            </CardContent>
-          </Card>
+              Configurar Webhook Automaticamente
+            </Button>
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Informações Úteis</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
+        <Card>
+          <CardHeader>
+            <CardTitle>Informações Úteis</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
               <div>
                 <strong>URL do Webhook:</strong>
                 <code className="ml-2 px-2 py-1 bg-muted rounded">
@@ -475,11 +475,10 @@ export default function DebugPage() {
               )}
               
               <p className="text-muted-foreground mt-4">
-                💡 <strong>Dica:</strong> Verifique os logs do servidor para ver mensagens recebidas e erros.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+              💡 <strong>Dica:</strong> Verifique os logs do servidor para ver mensagens recebidas e erros.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

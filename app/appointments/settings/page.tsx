@@ -167,25 +167,24 @@ function AppointmentSettingsContent() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-          <div className="text-center">Carregando...</div>
-        </div>
+        <div className="text-center">Carregando...</div>
       </div>
     )
   }
 
   return (
     <div>
-        <h1 className="text-3xl font-bold mb-6">Configurações de Agendamento</h1>
+      <h1 className="text-3xl font-bold mb-6">Configurações de Agendamento</h1>
 
-        {/* Google Calendar */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Google Calendar</CardTitle>
-            <CardDescription>
-              Conecte sua conta do Google Calendar para sincronizar agendamentos
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      {/* Google Calendar */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Google Calendar</CardTitle>
+          <CardDescription>
+            Conecte sua conta do Google Calendar para sincronizar agendamentos
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {googleCalendarConnected ? (
@@ -218,11 +217,11 @@ function AppointmentSettingsContent() {
                 )}
               </Button>
             </div>
-          </CardContent>
-        </Card>
+        </CardContent>
+      </Card>
 
-        {/* Configurações de Horários */}
-        <Card>
+      {/* Configurações de Horários */}
+      <Card>
           <CardHeader>
             <CardTitle>Configurações de Horários</CardTitle>
             <CardDescription>
@@ -304,9 +303,8 @@ function AppointmentSettingsContent() {
                 "Salvar Configurações"
               )}
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -315,8 +313,7 @@ export default function AppointmentSettingsPage() {
   return (
     <Suspense fallback={
       <div className="flex items-center justify-center min-h-[50vh]">
-          <div className="text-center">Carregando...</div>
-        </div>
+        <div className="text-center">Carregando...</div>
       </div>
     }>
       <AppointmentSettingsContent />

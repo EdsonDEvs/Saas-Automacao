@@ -87,25 +87,25 @@ export default function AppointmentsPage() {
 
   return (
     <div>
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Agendamentos</h1>
-            <p className="text-muted-foreground mt-1">
-              Gerencie seus agendamentos e integração com Google Calendar
-            </p>
-          </div>
-          <div className="flex gap-2">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Agendamentos</h1>
+          <p className="text-muted-foreground mt-1">
+            Gerencie seus agendamentos e integração com Google Calendar
+          </p>
+        </div>
+        <div className="flex gap-2">
             <Link href="/appointments/settings">
               <Button variant="outline">
                 <Settings className="mr-2 h-4 w-4" />
                 Configurações
               </Button>
             </Link>
-          </div>
         </div>
+      </div>
 
-        {/* Status do Google Calendar */}
-        <Card className="mb-6">
+      {/* Status do Google Calendar */}
+      <Card className="mb-6">
           <CardHeader>
             <CardTitle>Integração Google Calendar</CardTitle>
             <CardDescription>
@@ -134,10 +134,10 @@ export default function AppointmentsPage() {
               </Link>
             </div>
           </CardContent>
-        </Card>
+      </Card>
 
-        {/* Lista de Agendamentos */}
-        <Card>
+      {/* Lista de Agendamentos */}
+      <Card>
           <CardHeader>
             <CardTitle>Agendamentos</CardTitle>
             <CardDescription>
@@ -201,8 +201,7 @@ export default function AppointmentsPage() {
               </div>
             )}
           </CardContent>
-        </Card>
-      </div>
+      </Card>
     </div>
   )
 }
