@@ -409,33 +409,94 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Verifica se webhook está configurado
+    // Verifica se webhook está configurado (tenta múltiplos endpoints)
     let webhookConfigured = false
     let webhookUrl = null
     if (instanceName && isConnected) {
-      try {
-        const cleanUrl = integrationData.webhook_url.replace(/\/$/, "")
-        const checkResponse = await fetch(
-          `${cleanUrl}/webhook/find/${instanceName}`,
-          {
+      const cleanUrl = integrationData.webhook_url.replace(/\/$/, "")
+      const checkEndpoints = [
+        `/webhook/find/${instanceName}`,
+        `/webhook/${instanceName}`,
+        `/instance/fetchInstances`,
+      ]
+      
+      for (const endpoint of checkEndpoints) {
+        try {
+          const checkResponse = await fetch(`${cleanUrl}${endpoint}`, {
             method: "GET",
             headers: {
               "apikey": integrationData.api_key,
             },
+          })
+          
+          if (checkResponse.ok) {
+            const webhookData = await checkResponse.json().catch(() => ({}))
+            
+            // Tenta diferentes formatos de resposta
+            webhookUrl = webhookData?.url || 
+                        webhookData?.webhook?.url || 
+                        webhookData?.data?.url ||
+                        webhookData?.[0]?.webhook?.url ||
+                        null
+            
+            if (webhookUrl) {
+              webhookConfigured = true
+              console.log(`[Status API] ✅ Webhook encontrado: ${webhookUrl}`)
+              break
+            }
           }
-        )
-        
-        if (checkResponse.ok) {
-          const webhookData = await checkResponse.json().catch(() => ({}))
-          webhookUrl = webhookData?.url || webhookData?.webhook?.url || null
-          webhookConfigured = !!webhookUrl
-          console.log(`[Status API] Webhook verificado: ${webhookConfigured ? "✅ Configurado" : "❌ Não configurado"}`)
-          if (webhookUrl) {
-            console.log(`[Status API] URL do webhook: ${webhookUrl}`)
-          }
+        } catch (error) {
+          // Continua tentando outros endpoints
+          continue
         }
-      } catch (error) {
-        console.error(`[Status API] Erro ao verificar webhook:`, error)
+      }
+      
+      // Se não encontrou webhook configurado, tenta configurar novamente
+      if (!webhookConfigured && isConnected) {
+        try {
+          let baseUrl = process.env.NEXT_PUBLIC_APP_URL
+          if (!baseUrl && process.env.VERCEL_URL) {
+            baseUrl = `https://${process.env.VERCEL_URL}`
+          }
+          if (!baseUrl) {
+            baseUrl = request.headers.get('origin') || 
+                     (request.headers.get('host') ? `https://${request.headers.get('host')}` : null)
+          }
+          
+          if (baseUrl) {
+            const webhookUrlToSet = `${baseUrl}/api/webhook/whatsapp`
+            console.log(`[Status API] 🔄 Tentando configurar webhook novamente: ${webhookUrlToSet}`)
+            
+            const retryResponse = await fetch(
+              `${cleanUrl}/webhook/set/${instanceName}`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "apikey": integrationData.api_key,
+                },
+                body: JSON.stringify({
+                  url: webhookUrlToSet,
+                  webhook_by_events: false,
+                  webhook_base64: false,
+                  events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "MESSAGES_DELETE", "SEND_MESSAGE", "CONNECTION_UPDATE", "QRCODE_UPDATED"],
+                }),
+              }
+            )
+            
+            if (retryResponse.ok) {
+              webhookConfigured = true
+              webhookUrl = webhookUrlToSet
+              console.log(`[Status API] ✅ Webhook configurado com sucesso na verificação!`)
+            }
+          }
+        } catch (error) {
+          console.error(`[Status API] Erro ao reconfigurar webhook:`, error)
+        }
+      }
+      
+      if (!webhookConfigured) {
+        console.log(`[Status API] ⚠️ Webhook não configurado após todas as tentativas`)
       }
     }
 

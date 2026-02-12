@@ -201,9 +201,67 @@ export function WhatsAppStatusCard({ instanceName, phoneNumber }: WhatsAppStatus
             </p>
           )}
           {!webhookConfigured && (
-            <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-              O webhook precisa estar configurado para receber mensagens. Acesse <Link href="/debug" className="underline">/debug</Link> para configurar.
-            </p>
+            <div className="mt-2 space-y-2">
+              <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                O webhook precisa estar configurado para receber mensagens.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-xs"
+                onClick={async () => {
+                  setIsChecking(true)
+                  try {
+                    const response = await fetch("/api/evolution/one-click-onboarding", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ instanceName }),
+                    })
+                    const data = await response.json()
+                    if (response.ok && data.webhookConfigured) {
+                      toast({
+                        title: "✅ Sucesso!",
+                        description: "Webhook configurado automaticamente",
+                      })
+                      await checkStatus()
+                    } else {
+                      // Se precisa configurar manualmente, mostra instruções
+                      if (data.manualConfigRequired && data.manualConfigInstructions) {
+                        const instructions = data.manualConfigInstructions
+                        toast({
+                          title: "⚠️ Configuração Manual Necessária",
+                          description: `Configure o webhook manualmente no painel da Evolution API. URL: ${instructions.url}`,
+                          duration: 10000,
+                        })
+                        console.warn("[WhatsApp Status] Instruções de configuração manual:", instructions)
+                      } else {
+                        const errorMsg = data.error || data.details?.body || `Erro ${data.details?.status || response.status}: ${data.details?.statusText || "Erro desconhecido"}`
+                        console.error("[WhatsApp Status] Erro ao configurar webhook:", data)
+                        throw new Error(errorMsg)
+                      }
+                    }
+                  } catch (error: any) {
+                    toast({
+                      title: "Erro",
+                      description: error.message || "Não foi possível configurar o webhook",
+                      variant: "destructive",
+                    })
+                  } finally {
+                    setIsChecking(false)
+                  }
+                }}
+                disabled={isChecking}
+              >
+                {isChecking ? (
+                  <>
+                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                    Configurando...
+                  </>
+                ) : (
+                  "🔧 Configurar Webhook Agora"
+                )}
+              </Button>
+            </div>
           )}
         </div>
       )}

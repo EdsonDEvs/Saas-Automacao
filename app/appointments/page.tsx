@@ -5,21 +5,42 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Calendar, Clock, User, Phone, Mail, Plus, Settings, CheckCircle2, XCircle } from "lucide-react"
+import { Calendar, Clock, User, Phone, Mail, Settings, CheckCircle2, XCircle } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import FullCalendar from "@fullcalendar/react"
+import dayGridPlugin from "@fullcalendar/daygrid"
+import timeGridPlugin from "@fullcalendar/timegrid"
+import listPlugin from "@fullcalendar/list"
+import interactionPlugin from "@fullcalendar/interaction"
+import ptBrLocale from "@fullcalendar/core/locales/pt-br"
 
 export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const { toast } = useToast()
   const supabase = createClient()
 
   useEffect(() => {
     loadAppointments()
     checkGoogleCalendar()
+    const stylesheetUrls = [
+      "https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.20/index.css",
+      "https://cdn.jsdelivr.net/npm/@fullcalendar/daygrid@6.1.20/index.css",
+      "https://cdn.jsdelivr.net/npm/@fullcalendar/timegrid@6.1.20/index.css",
+      "https://cdn.jsdelivr.net/npm/@fullcalendar/list@6.1.20/index.css",
+    ]
+
+    stylesheetUrls.forEach((url) => {
+      if (document.querySelector(`link[href="${url}"]`)) return
+      const link = document.createElement("link")
+      link.rel = "stylesheet"
+      link.href = url
+      document.head.appendChild(link)
+    })
   }, [])
 
   const loadAppointments = async () => {
@@ -64,10 +85,37 @@ export default function AppointmentsPage() {
     }
   }
 
+  const syncGoogleCalendar = async () => {
+    setSyncing(true)
+    try {
+      const response = await fetch("/api/google-calendar/sync", {
+        method: "POST",
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || "Erro ao sincronizar Google Calendar")
+      }
+      await loadAppointments()
+      toast({
+        title: "Sincronizado",
+        description: "Sincronização concluída com sucesso.",
+      })
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao sincronizar Google Calendar",
+        variant: "destructive",
+      })
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; variant: "default" | "destructive" | "secondary" }> = {
       scheduled: { label: "Agendado", variant: "default" },
       confirmed: { label: "Confirmado", variant: "default" },
+      pending: { label: "Pendente", variant: "secondary" },
       cancelled: { label: "Cancelado", variant: "destructive" },
       completed: { label: "Concluído", variant: "secondary" },
     }
@@ -84,6 +132,34 @@ export default function AppointmentsPage() {
       </span>
     )
   }
+
+  const calendarEvents = appointments.map((appointment) => {
+    const start = new Date(appointment.appointment_date)
+    const end = new Date(start)
+    const duration =
+      appointment.service_duration_minutes || appointment.duration_minutes || 60
+    end.setMinutes(end.getMinutes() + duration)
+
+    const title = appointment.service_name
+      ? `${appointment.service_name} - ${appointment.customer_name}`
+      : appointment.customer_name
+
+    const statusColors: Record<string, string> = {
+      scheduled: "#16a34a",
+      confirmed: "#16a34a",
+      pending: "#f59e0b",
+      cancelled: "#ef4444",
+      completed: "#6b7280",
+    }
+
+    return {
+      id: appointment.id,
+      title,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      color: statusColors[appointment.status] || "#2563eb",
+    }
+  })
 
   return (
     <div>
@@ -127,13 +203,42 @@ export default function AppointmentsPage() {
                   </>
                 )}
               </div>
-              <Link href="/appointments/settings">
-                <Button variant={googleCalendarConnected ? "outline" : "default"}>
-                  {googleCalendarConnected ? "Reconfigurar" : "Conectar Google Calendar"}
-                </Button>
-              </Link>
+              <div className="flex gap-2">
+                {googleCalendarConnected && (
+                  <Button variant="outline" onClick={syncGoogleCalendar} disabled={syncing}>
+                    {syncing ? "Sincronizando..." : "Sincronizar agora"}
+                  </Button>
+                )}
+                <Link href="/appointments/settings">
+                  <Button variant={googleCalendarConnected ? "outline" : "default"}>
+                    {googleCalendarConnected ? "Reconfigurar" : "Conectar Google Calendar"}
+                  </Button>
+                </Link>
+              </div>
             </div>
           </CardContent>
+      </Card>
+
+      {/* Calendário */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Agenda</CardTitle>
+          <CardDescription>Visualização dos agendamentos no calendário</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FullCalendar
+            plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
+            initialView="dayGridMonth"
+            headerToolbar={{
+              left: "prev,next today",
+              center: "title",
+              right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
+            }}
+            events={calendarEvents}
+            height="auto"
+            locale={ptBrLocale}
+          />
+        </CardContent>
       </Card>
 
       {/* Lista de Agendamentos */}

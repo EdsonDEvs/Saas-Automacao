@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -36,6 +36,8 @@ export default function SetupPage() {
   const [qrcode, setQrcode] = useState<string | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [checkingStatus, setCheckingStatus] = useState(false)
+  const [onboardingRunning, setOnboardingRunning] = useState(false)
+  const [onboardingDone, setOnboardingDone] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClient()
@@ -55,6 +57,37 @@ export default function SetupPage() {
     }
     setStep(step + 1)
   }
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        await ensureUserProfile()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("business_name")
+          .eq("id", user.id)
+          .maybeSingle()
+        if (profile?.business_name) {
+          const slug = profile.business_name
+            .toLowerCase()
+            .trim()
+            .replace(/\s+/g, "-")
+            .replace(/[^a-z0-9-]/g, "")
+            .replace(/-+/g, "-")
+            .replace(/^-|-$/g, "")
+          if (!integration.instance_name) {
+            setIntegration({ ...integration, instance_name: slug || `instancia-${user.id.slice(0, 6)}` })
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar perfil:", error)
+      }
+    }
+
+    loadProfile()
+  }, [])
 
   const handleBack = () => {
     setStep(step - 1)
@@ -77,16 +110,14 @@ export default function SetupPage() {
       }
 
       // Valida campos obrigatórios
-      if (platform === "whatsapp") {
-        if (!integration.webhook_url || !integration.api_key) {
-          toast({
-            title: "Campos obrigatórios",
-            description: "Preencha a URL e API Key da Evolution API",
-            variant: "destructive",
-          })
-          setSaving(false)
-          return
-        }
+      if (platform === "whatsapp" && !integration.instance_name) {
+        toast({
+          title: "Nome da instância obrigatório",
+          description: "Defina um nome para sua instância do WhatsApp.",
+          variant: "destructive",
+        })
+        setSaving(false)
+        return
       }
 
       // Remove platform do integration para evitar duplicação
@@ -147,8 +178,6 @@ export default function SetupPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          evolutionApiUrl: integration.webhook_url,
-          evolutionApiKey: integration.api_key,
           instanceName: integration.instance_name,
         }),
       })
@@ -231,6 +260,7 @@ export default function SetupPage() {
       if (data.connected) {
         setIsConnected(true)
         setQrcode(null)
+        await runOneClickOnboarding(data.instanceName || integration.instance_name)
         toast({
           title: "Conectado!",
           description: "WhatsApp conectado com sucesso!",
@@ -285,6 +315,7 @@ export default function SetupPage() {
         if (data.connected) {
           setIsConnected(true)
           setQrcode(null)
+          await runOneClickOnboarding(data.instanceName || instanceName)
           clearInterval(interval)
           toast({
             title: "Conectado!",
@@ -310,6 +341,40 @@ export default function SetupPage() {
 
     // Limpa o interval após 10 minutos
     setTimeout(() => clearInterval(interval), 600000)
+  }
+
+  const runOneClickOnboarding = async (instanceName: string) => {
+    if (onboardingRunning || onboardingDone) return
+    setOnboardingRunning(true)
+    try {
+      const response = await fetch("/api/evolution/one-click-onboarding", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ instanceName }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || "Erro ao executar onboarding automático")
+      }
+      setOnboardingDone(true)
+      if (data.welcomeSent) {
+        toast({
+          title: "🎉 Tudo pronto!",
+          description: "Enviamos uma mensagem de boas-vindas no WhatsApp.",
+        })
+      }
+    } catch (error: any) {
+      console.error("Erro no onboarding automático:", error)
+      toast({
+        title: "Aviso",
+        description: "Conectado, mas não foi possível completar o onboarding automático.",
+        variant: "destructive",
+      })
+    } finally {
+      setOnboardingRunning(false)
+    }
   }
 
   const renderStepContent = () => {
@@ -387,37 +452,6 @@ export default function SetupPage() {
 
               {!qrcode && !isConnected && (
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="webhook_url">URL da Evolution API do Servidor</Label>
-                    <Input
-                      id="webhook_url"
-                      placeholder="https://evolution.seu-servidor.com"
-                      value={integration.webhook_url || ""}
-                      onChange={(e) =>
-                        setIntegration({ ...integration, webhook_url: e.target.value })
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      URL do seu servidor Evolution API (ex: https://evolution.seu-servidor.com)
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="api_key">API Key do Servidor</Label>
-                    <Input
-                      id="api_key"
-                      type="password"
-                      placeholder="Sua API Key"
-                      value={integration.api_key || ""}
-                      onChange={(e) =>
-                        setIntegration({ ...integration, api_key: e.target.value })
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      API Key configurada no seu servidor Evolution API
-                    </p>
-                  </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="instance_name">Nome da Instância</Label>
                   <Input
@@ -440,7 +474,7 @@ export default function SetupPage() {
 
                   <Button
                     onClick={handleCreateInstance}
-                    disabled={creatingInstance || !integration.webhook_url || !integration.api_key || !integration.instance_name}
+                    disabled={creatingInstance || !integration.instance_name}
                     className="w-full"
                   >
                     {creatingInstance ? (
@@ -643,12 +677,14 @@ export default function SetupPage() {
               <div className="p-4 bg-muted rounded-lg">
                 <h4 className="font-semibold mb-2">Como configurar:</h4>
                 {platform === "whatsapp" && (
-                  <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
-                    <li>Copie a URL acima</li>
-                    <li>Na Evolution API, vá em Configurações → Webhooks</li>
-                    <li>Cole a URL no campo "Webhook URL"</li>
-                    <li>Salve as configurações</li>
-                  </ol>
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p>
+                      ✅ O webhook do WhatsApp é configurado automaticamente após a conexão.
+                    </p>
+                    <p>
+                      Se precisar testar manualmente, você pode usar a URL acima.
+                    </p>
+                  </div>
                 )}
                 {platform === "telegram" && (
                   <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">

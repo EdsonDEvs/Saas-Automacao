@@ -2,6 +2,145 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { generateAIResponse } from "@/lib/ai/openai"
 import { detectAppointmentIntent } from "@/lib/ai/appointment-detector"
+import { getGoogleCalendarClient, refreshAccessToken } from "@/lib/google-calendar/client"
+
+const DEFAULT_TIMEZONE = "America/Sao_Paulo"
+const DEFAULT_APPOINTMENT_DURATION_MINUTES = 60
+
+function formatLocalDateTime(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  const hour = String(date.getHours()).padStart(2, "0")
+  const minute = String(date.getMinutes()).padStart(2, "0")
+  return `${year}-${month}-${day}T${hour}:${minute}:00`
+}
+
+function addMinutesToDateTime(date: string, time: string, minutes: number) {
+  const [year, month, day] = date.split("-").map(Number)
+  const [hour, minute] = time.split(":").map(Number)
+  const baseDate = new Date(year, month - 1, day, hour, minute)
+  baseDate.setMinutes(baseDate.getMinutes() + minutes)
+  return formatLocalDateTime(baseDate)
+}
+
+function isConfirmationMessage(message: string) {
+  const normalized = message.toLowerCase().trim()
+  const confirmationKeywords = [
+    "confirmo",
+    "confirmar",
+    "confirmado",
+    "pode agendar",
+    "pode marcar",
+    "fechado",
+    "ok",
+    "sim",
+    "pode ser",
+  ]
+  return confirmationKeywords.some((keyword) => normalized.includes(keyword))
+}
+
+function getServiceDuration(
+  serviceName: string | undefined,
+  serviceCatalog: { name: string; duration_minutes: number }[],
+  fallbackDuration: number
+) {
+  if (!serviceName) return fallbackDuration
+  const match = serviceCatalog.find(
+    (service) => service.name.toLowerCase() === serviceName.toLowerCase()
+  )
+  return match?.duration_minutes || fallbackDuration
+}
+
+async function createCalendarEventForUser({
+  supabase,
+  userId,
+  date,
+  time,
+  durationMinutes,
+  service,
+}: {
+  supabase: ReturnType<typeof createAdminClient>
+  userId: string
+  date: string
+  time: string
+  durationMinutes: number
+  service?: string
+}) {
+  const { data: calendarConfig, error: configError } = await supabase
+    .from("google_calendar_configs")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .maybeSingle()
+
+  if (configError || !calendarConfig) {
+    return { success: false, error: "Google Calendar não configurado." }
+  }
+
+  let accessToken = calendarConfig.access_token
+  if (calendarConfig.token_expires_at && new Date(calendarConfig.token_expires_at) < new Date()) {
+    if (!calendarConfig.refresh_token) {
+      return { success: false, error: "Token expirado e refresh token ausente." }
+    }
+    try {
+      const refreshed = await refreshAccessToken(calendarConfig.refresh_token)
+      accessToken = refreshed.access_token
+      const expiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString()
+      await supabase
+        .from("google_calendar_configs")
+        .update({
+          access_token: accessToken,
+          token_expires_at: expiresAt,
+        })
+        .eq("user_id", userId)
+    } catch (error) {
+      console.error("[Webhook] Erro ao renovar token do Google Calendar:", error)
+      return { success: false, error: "Erro ao renovar token do Google Calendar." }
+    }
+  }
+
+  const calendar = getGoogleCalendarClient(accessToken, calendarConfig.refresh_token || undefined)
+  const startDateTime = `${date}T${time}:00`
+  const endDateTime = addMinutesToDateTime(date, time, durationMinutes)
+  const summary = service ? `Agendamento - ${service}` : "Agendamento"
+
+  try {
+    const response = await calendar.events.insert({
+      calendarId: calendarConfig.calendar_id || "primary",
+      requestBody: {
+        summary,
+        description: service ? `Agendamento de ${service}` : "Agendamento",
+        start: {
+          dateTime: startDateTime,
+          timeZone: DEFAULT_TIMEZONE,
+        },
+        end: {
+          dateTime: endDateTime,
+          timeZone: DEFAULT_TIMEZONE,
+        },
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: "email", minutes: 24 * 60 },
+            { method: "popup", minutes: 30 },
+          ],
+        },
+      },
+    })
+
+    return {
+      success: true,
+      eventId: response.data.id,
+      eventLink: response.data.htmlLink,
+      startDateTime,
+      endDateTime,
+    }
+  } catch (error) {
+    console.error("[Webhook] Erro ao criar evento no Google Calendar:", error)
+    return { success: false, error: "Erro ao criar evento no Google Calendar." }
+  }
+}
 
 export async function POST(
   request: NextRequest,
@@ -231,6 +370,13 @@ export async function POST(
         )
       }
 
+      const { data: appointmentSettings } = await supabase
+        .from("appointment_settings")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .maybeSingle()
+
       // Formata inventário para LLM
       const inventoryText = products
         ?.map(
@@ -252,67 +398,230 @@ export async function POST(
 
       console.log(`[Webhook ${platform}] ✅ Contexto obtido com sucesso para agente: ${context.agent.name}`)
       
-      // Detecta se há intenção de agendamento
-      const appointmentIntent = detectAppointmentIntent(userMessage, fromNumber)
+      const serviceCatalog = Array.isArray(agentConfig.service_catalog)
+        ? agentConfig.service_catalog
+        : []
+      const serviceNames = serviceCatalog.map((service: any) => service.name).filter(Boolean)
+      const productNames = products?.map((product: any) => product.name).filter(Boolean) || []
+      const appointmentIntent = detectAppointmentIntent(
+        userMessage,
+        fromNumber,
+        [...serviceNames, ...productNames]
+      )
       console.log(`[Webhook ${platform}] 📅 Intenção de agendamento:`, appointmentIntent)
 
+      const defaultDuration =
+        appointmentSettings?.default_duration_minutes || DEFAULT_APPOINTMENT_DURATION_MINUTES
+      const confirmationMessage = isConfirmationMessage(userMessage)
       let aiResponse: string
 
-      // Se detectou intenção de agendamento, busca horários disponíveis
-      if (appointmentIntent.hasIntent) {
-        try {
-          const date = appointmentIntent.date || new Date().toISOString().split('T')[0]
-          const slotsResponse = await fetch(
-            `${request.nextUrl.origin}/api/appointments/available-slots?date=${date}&duration=60`,
-            {
-              headers: {
-                'Cookie': request.headers.get('cookie') || '',
-              }
-            }
-          )
+      if (confirmationMessage) {
+        const nowIso = new Date().toISOString()
+        const { data: pendingAppointment } = await supabase
+          .from("appointments")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("customer_phone", fromNumber)
+          .eq("status", "pending")
+          .gt("hold_expires_at", nowIso)
+          .order("hold_expires_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
 
-          if (slotsResponse.ok) {
-            const slotsData = await slotsResponse.json()
-            const availableSlots = slotsData.availableSlots || []
+        if (!pendingAppointment) {
+          aiResponse =
+            "Não encontrei nenhuma reserva pendente ativa. Quer escolher um novo horário?"
+        } else {
+          const pendingDateTime = new Date(pendingAppointment.appointment_date).toISOString()
+          const [pendingDate, pendingTimeWithSeconds] = pendingDateTime.split("T")
+          const pendingTime = pendingTimeWithSeconds.slice(0, 5)
+          const durationMinutes =
+            pendingAppointment.service_duration_minutes ||
+            pendingAppointment.duration_minutes ||
+            defaultDuration
 
-            if (availableSlots.length > 0) {
-              // Formata os horários disponíveis
-              const formattedSlots = availableSlots.slice(0, 5).map((slot: string) => {
-                const date = new Date(slot)
-                return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-              }).join(', ')
+          const calendarResult = await createCalendarEventForUser({
+            supabase,
+            userId: integration.user_id,
+            date: pendingDate,
+            time: pendingTime,
+            durationMinutes,
+            service: pendingAppointment.service_name || undefined,
+          })
 
-              aiResponse = `Ótimo! Vejo que você quer agendar. Aqui estão os horários disponíveis para ${new Date(date).toLocaleDateString('pt-BR')}:\n\n${formattedSlots}\n\nQual horário você prefere?`
-            } else {
-              aiResponse = `Desculpe, não há horários disponíveis para ${new Date(date).toLocaleDateString('pt-BR')}. Gostaria de verificar outro dia?`
+          if (calendarResult.success && calendarResult.eventId) {
+            await supabase
+              .from("appointments")
+              .update({
+                status: "scheduled",
+                google_calendar_event_id: calendarResult.eventId,
+                hold_expires_at: null,
+              })
+              .eq("id", pendingAppointment.id)
+
+            const formattedDate = new Date(`${pendingDate}T00:00:00`).toLocaleDateString("pt-BR")
+            aiResponse = `Agendamento confirmado para ${formattedDate} às ${pendingTime}.`
+            if (calendarResult.eventLink) {
+              aiResponse += `\n\nLink do evento: ${calendarResult.eventLink}`
             }
           } else {
-            // Se não conseguir buscar horários, usa IA normal
-            const openaiKey = process.env.OPENAI_API_KEY
-            aiResponse = await generateAIResponse(
-              `O cliente quer agendar. Mensagem: ${userMessage}. Responda de forma amigável oferecendo ajuda para agendar.`,
-              {
-                agentName: context.agent.name || "Assistente",
-                persona: context.agent.persona || "",
-                tone: context.agent.tone || "amigavel",
-                inventory: context.inventory_text || "",
-              },
-              openaiKey
+            aiResponse =
+              "Não consegui confirmar seu agendamento agora. Posso tentar novamente?"
+          }
+        }
+      } else if (appointmentIntent.hasIntent) {
+        try {
+          if (appointmentIntent.date && appointmentIntent.time) {
+            const durationMinutes = getServiceDuration(
+              appointmentIntent.service,
+              serviceCatalog,
+              defaultDuration
             )
+            const appointmentDateTime = new Date(
+              `${appointmentIntent.date}T${appointmentIntent.time}:00`
+            )
+            const holdExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+            const startOfDay = new Date(`${appointmentIntent.date}T00:00:00`)
+            const endOfDay = new Date(`${appointmentIntent.date}T23:59:59`)
+            const { data: dayAppointments } = await supabase
+              .from("appointments")
+              .select(
+                "appointment_date, duration_minutes, service_duration_minutes, status, hold_expires_at"
+              )
+              .eq("user_id", userId)
+              .gte("appointment_date", startOfDay.toISOString())
+              .lte("appointment_date", endOfDay.toISOString())
+              .in("status", ["scheduled", "confirmed", "pending"])
+
+            const now = new Date()
+            const activeAppointments = (dayAppointments || []).filter((apt: any) => {
+              if (apt.status !== "pending") return true
+              return apt.hold_expires_at && new Date(apt.hold_expires_at) > now
+            })
+
+            const slotEnd = new Date(appointmentDateTime)
+            slotEnd.setMinutes(slotEnd.getMinutes() + durationMinutes)
+
+            const hasConflict = activeAppointments.some((apt: any) => {
+              const aptStart = new Date(apt.appointment_date)
+              const aptDuration =
+                apt.service_duration_minutes || apt.duration_minutes || defaultDuration
+              const aptEnd = new Date(aptStart)
+              aptEnd.setMinutes(aptEnd.getMinutes() + aptDuration)
+              return (
+                (appointmentDateTime >= aptStart && appointmentDateTime < aptEnd) ||
+                (slotEnd > aptStart && slotEnd <= aptEnd) ||
+                (appointmentDateTime <= aptStart && slotEnd >= aptEnd)
+              )
+            })
+
+            if (hasConflict) {
+              aiResponse =
+                "Esse horário acabou de ficar indisponível. Quer ver outros horários para o mesmo dia?"
+            } else {
+              const existingPending = await supabase
+                .from("appointments")
+                .select("id")
+                .eq("user_id", userId)
+                .eq("customer_phone", fromNumber)
+                .eq("status", "pending")
+                .eq("appointment_date", appointmentDateTime.toISOString())
+                .gt("hold_expires_at", new Date().toISOString())
+                .maybeSingle()
+
+              if (existingPending.data?.id) {
+                await supabase
+                  .from("appointments")
+                  .update({ hold_expires_at: holdExpiresAt })
+                  .eq("id", existingPending.data.id)
+              } else {
+                await supabase
+                  .from("appointments")
+                  .insert({
+                    user_id: userId,
+                    customer_name: "Cliente",
+                    customer_phone: fromNumber,
+                    appointment_date: appointmentDateTime.toISOString(),
+                    duration_minutes: durationMinutes,
+                    service_name: appointmentIntent.service || null,
+                    service_duration_minutes: durationMinutes,
+                    status: "pending",
+                    hold_expires_at: holdExpiresAt,
+                  })
+              }
+
+              const formattedDate = new Date(
+                `${appointmentIntent.date}T00:00:00`
+              ).toLocaleDateString("pt-BR")
+              const serviceLabel = appointmentIntent.service
+                ? ` para ${appointmentIntent.service}`
+                : ""
+              aiResponse = `Reservei${serviceLabel} em ${formattedDate} às ${appointmentIntent.time}. Essa reserva vale por 10 minutos. Você confirma?`
+            }
+          } else {
+            const date = appointmentIntent.date || new Date().toISOString().split("T")[0]
+            const slotsResponse = await fetch(
+              `${request.nextUrl.origin}/api/appointments/available-slots?date=${date}&duration=${defaultDuration}`,
+              {
+                headers: {
+                  Cookie: request.headers.get("cookie") || "",
+                },
+              }
+            )
+
+            if (slotsResponse.ok) {
+              const slotsData = await slotsResponse.json()
+              const availableSlots = slotsData.availableSlots || []
+
+              if (availableSlots.length > 0) {
+                const formattedSlots = availableSlots
+                  .slice(0, 5)
+                  .map((slot: string) => {
+                    const slotDate = new Date(slot)
+                    return slotDate.toLocaleTimeString("pt-BR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  })
+                  .join(", ")
+
+                aiResponse = `Ótimo! Aqui estão os horários disponíveis para ${new Date(
+                  date
+                ).toLocaleDateString("pt-BR")}:\n\n${formattedSlots}\n\nQual horário você prefere?`
+              } else {
+                aiResponse = `Desculpe, não há horários disponíveis para ${new Date(
+                  date
+                ).toLocaleDateString("pt-BR")}. Gostaria de verificar outro dia?`
+              }
+            } else {
+              const openaiKey = process.env.OPENAI_API_KEY
+              aiResponse = await generateAIResponse(
+                `O cliente quer agendar. Mensagem: ${userMessage}. Responda de forma amigável oferecendo ajuda para agendar.`,
+                {
+                  agentName: context.agent.name || "Assistente",
+                  persona: context.agent.persona || "",
+                  tone: context.agent.tone || "amigavel",
+                  inventory: context.inventory_text || "",
+                },
+                openaiKey
+              )
+            }
           }
         } catch (error) {
-          console.error(`[Webhook ${platform}] Erro ao buscar horários:`, error)
-          // Fallback para resposta normal
+          console.error(`[Webhook ${platform}] Erro ao processar agendamento:`, error)
           const openaiKey = process.env.OPENAI_API_KEY
-          aiResponse = await generateAIResponse(userMessage, {
-            agentName: context.agent.name || "Assistente",
-            persona: context.agent.persona || "",
-            tone: context.agent.tone || "amigavel",
-            inventory: context.inventory_text || "",
-          }, openaiKey)
+          aiResponse = await generateAIResponse(
+            userMessage,
+            {
+              agentName: context.agent.name || "Assistente",
+              persona: context.agent.persona || "",
+              tone: context.agent.tone || "amigavel",
+              inventory: context.inventory_text || "",
+            },
+            openaiKey
+          )
         }
       } else {
-        // Resposta normal com IA
         console.log(`[Webhook ${platform}] 🤖 Gerando resposta com IA...`)
         const openaiKey = process.env.OPENAI_API_KEY
         if (!openaiKey) {
@@ -323,12 +632,16 @@ export async function POST(
           )
         }
 
-        aiResponse = await generateAIResponse(userMessage, {
-          agentName: context.agent.name || "Assistente",
-          persona: context.agent.persona || "",
-          tone: context.agent.tone || "amigavel",
-          inventory: context.inventory_text || "",
-        }, openaiKey)
+        aiResponse = await generateAIResponse(
+          userMessage,
+          {
+            agentName: context.agent.name || "Assistente",
+            persona: context.agent.persona || "",
+            tone: context.agent.tone || "amigavel",
+            inventory: context.inventory_text || "",
+          },
+          openaiKey
+        )
       }
 
       // Envia resposta de volta para a plataforma

@@ -6,12 +6,18 @@ export interface AppointmentIntent {
   hasIntent: boolean
   date?: string // YYYY-MM-DD
   time?: string // HH:MM
+  service?: string
   customerName?: string
   customerPhone?: string
   customerEmail?: string
+  missingFields?: string[]
 }
 
-export function detectAppointmentIntent(message: string, customerPhone?: string): AppointmentIntent {
+export function detectAppointmentIntent(
+  message: string,
+  customerPhone?: string,
+  serviceOptions: string[] = []
+): AppointmentIntent {
   const lowerMessage = message.toLowerCase()
   
   // Palavras-chave que indicam intenção de agendamento
@@ -88,10 +94,29 @@ export function detectAppointmentIntent(message: string, customerPhone?: string)
     }
   }
 
+  // Tenta detectar serviço com base nos produtos/serviços cadastrados
+  let service: string | undefined
+  if (serviceOptions.length > 0) {
+    const normalizedOptions = serviceOptions.map((option) => option.trim()).filter(Boolean)
+    const matched = normalizedOptions.find((option) =>
+      lowerMessage.includes(option.toLowerCase())
+    )
+    if (matched) {
+      service = matched
+    }
+  }
+
+  const missingFields: string[] = []
+  if (!date) missingFields.push("date")
+  if (!time) missingFields.push("time")
+  if (!service) missingFields.push("service")
+
   return {
     hasIntent: true,
     date,
     time,
+    service,
     customerPhone,
+    missingFields,
   }
 }

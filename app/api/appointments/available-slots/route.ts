@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { format, addDays, setHours, setMinutes, isBefore, isAfter, addMinutes } from "date-fns"
+import { setHours, setMinutes, addMinutes } from "date-fns"
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,13 +50,27 @@ export async function GET(request: NextRequest) {
 
     const { data: existingAppointments } = await supabase
       .from("appointments")
-      .select("appointment_date, duration_minutes")
+      .select("appointment_date, duration_minutes, service_duration_minutes, status, hold_expires_at")
       .eq("user_id", user.id)
       .gte("appointment_date", startOfDay.toISOString())
       .lte("appointment_date", endOfDay.toISOString())
-      .in("status", ["scheduled", "confirmed"])
+      .in("status", ["scheduled", "confirmed", "pending"])
 
-    const availableSlots = generateSlots(date, duration, settings, user.id, supabase, existingAppointments || [])
+    const now = new Date()
+    const activeAppointments =
+      existingAppointments?.filter((apt: any) => {
+        if (apt.status !== "pending") return true
+        return apt.hold_expires_at && new Date(apt.hold_expires_at) > now
+      }) || []
+
+    const availableSlots = generateSlots(
+      date,
+      duration,
+      settings,
+      user.id,
+      supabase,
+      activeAppointments
+    )
 
     return NextResponse.json({ availableSlots })
   } catch (error: any) {
@@ -102,7 +116,8 @@ function generateSlots(
       // Verifica se não conflita com agendamentos existentes
       const hasConflict = existingAppointments.some((apt) => {
         const aptStart = new Date(apt.appointment_date)
-        const aptEnd = addMinutes(aptStart, apt.duration_minutes || 60)
+        const aptDuration = apt.service_duration_minutes || apt.duration_minutes || 60
+        const aptEnd = addMinutes(aptStart, aptDuration)
         
         // Verifica sobreposição
         return (

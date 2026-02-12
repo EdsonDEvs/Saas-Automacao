@@ -49,6 +49,7 @@ export async function ensureUserProfile() {
         .insert({
           user_id: user.id,
           agent_name: "Assistente",
+          service_catalog: [],
         })
     }
 

@@ -20,6 +20,7 @@ type AgentConfig = {
   system_prompt: string
   tone: "Formal" | "Friendly" | "Sales"
   is_active: boolean
+  service_catalog?: { name: string; duration_minutes: number }[]
 }
 
 export default function AgentPage() {
@@ -30,6 +31,9 @@ export default function AgentPage() {
   const [systemPrompt, setSystemPrompt] = useState("")
   const [tone, setTone] = useState<"Formal" | "Friendly" | "Sales">("Friendly")
   const [isActive, setIsActive] = useState(true)
+  const [serviceCatalog, setServiceCatalog] = useState<
+    { name: string; duration_minutes: number }[]
+  >([])
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClient()
@@ -63,6 +67,7 @@ export default function AgentPage() {
         setSystemPrompt(data.system_prompt)
         setTone(data.tone)
         setIsActive(data.is_active)
+        setServiceCatalog(data.service_catalog || [])
       }
     } catch (error: any) {
       toast({
@@ -95,6 +100,7 @@ export default function AgentPage() {
             system_prompt: systemPrompt,
             tone,
             is_active: isActive,
+            service_catalog: serviceCatalog,
           })
           .eq("id", config.id)
 
@@ -109,6 +115,7 @@ export default function AgentPage() {
             system_prompt: systemPrompt,
             tone,
             is_active: isActive,
+            service_catalog: serviceCatalog,
           })
 
         if (error) throw error
@@ -194,6 +201,69 @@ export default function AgentPage() {
                 <p className="text-sm text-muted-foreground">
                   Descreva as regras de negócio, contexto da empresa e instruções específicas para o agente.
                 </p>
+              </div>
+
+              <div className="space-y-3">
+                <Label>Serviços e Durações</Label>
+                <p className="text-sm text-muted-foreground">
+                  Informe os serviços disponíveis e a duração média de cada um. A IA usa isso para reservar o tempo correto.
+                </p>
+                <div className="space-y-3">
+                  {serviceCatalog.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Nenhum serviço cadastrado. Adicione pelo menos um para melhorar os agendamentos.
+                    </p>
+                  )}
+                  {serviceCatalog.map((service, index) => (
+                    <div key={`${service.name}-${index}`} className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                      <Input
+                        value={service.name}
+                        placeholder="Ex: Corte de cabelo"
+                        onChange={(e) => {
+                          const updated = [...serviceCatalog]
+                          updated[index] = { ...service, name: e.target.value }
+                          setServiceCatalog(updated)
+                        }}
+                      />
+                      <Input
+                        type="number"
+                        min={5}
+                        value={service.duration_minutes}
+                        placeholder="Duração (min)"
+                        onChange={(e) => {
+                          const updated = [...serviceCatalog]
+                          updated[index] = {
+                            ...service,
+                            duration_minutes: parseInt(e.target.value || "0", 10),
+                          }
+                          setServiceCatalog(updated)
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const updated = serviceCatalog.filter((_, idx) => idx !== index)
+                          setServiceCatalog(updated)
+                        }}
+                      >
+                        Remover
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setServiceCatalog([
+                      ...serviceCatalog,
+                      { name: "", duration_minutes: 60 },
+                    ])
+                  }
+                >
+                  Adicionar serviço
+                </Button>
               </div>
 
               <div className="flex items-center space-x-2">

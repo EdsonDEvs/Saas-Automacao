@@ -91,6 +91,7 @@ export async function GET(request: NextRequest) {
         name: agentConfig.agent_name,
         persona: agentConfig.system_prompt,
         tone: agentConfig.tone,
+        services: agentConfig.service_catalog || [],
       },
       context: agentConfig.system_prompt,
       inventory_text: inventoryText,

@@ -11,12 +11,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
     }
 
-    const body = await request.json()
+    const body = await request.json().catch(() => ({}))
     let { evolutionApiUrl, evolutionApiKey, instanceName } = body
+
+    evolutionApiUrl = evolutionApiUrl || process.env.EVOLUTION_API_URL
+    evolutionApiKey = evolutionApiKey || process.env.EVOLUTION_API_KEY
 
     if (!evolutionApiUrl || !evolutionApiKey || !instanceName) {
       return NextResponse.json(
-        { error: "URL da API, API Key e Nome da Instância são obrigatórios" },
+        {
+          error:
+            "Configuração da Evolution API ausente. Defina EVOLUTION_API_URL e EVOLUTION_API_KEY no servidor.",
+        },
         { status: 400 }
       )
     }
@@ -131,7 +137,7 @@ export async function POST(request: NextRequest) {
     // Salva a integração no banco
     await ensureUserProfileServer()
     
-    const { error: dbError } = await supabase
+    const { error: dbError, data: savedIntegration } = await supabase
       .from("integrations")
       .upsert({
         user_id: user.id,
@@ -143,9 +149,78 @@ export async function POST(request: NextRequest) {
       }, {
         onConflict: "user_id,platform"
       })
+      .select()
+      .single()
 
     if (dbError) {
       console.error("Erro ao salvar integração:", dbError)
+      // Não falha completamente, mas loga o erro
+    } else {
+      console.log("✅ Integração salva com sucesso:", {
+        id: savedIntegration?.id,
+        instance_name: instanceName,
+        has_webhook_url: !!cleanUrl,
+        has_api_key: !!evolutionApiKey,
+      })
+    }
+
+    // Configura webhook automaticamente (fallback)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
+    const webhookUrl = `${appUrl}/api/webhook/whatsapp`
+    let webhookConfigured = false
+    try {
+      let webhookResponse = await fetch(`${cleanUrl}/webhook/set/${instanceName}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": evolutionApiKey,
+        },
+        body: JSON.stringify({
+          url: webhookUrl,
+          webhook_by_events: false,
+          webhook_base64: false,
+          events: [
+            "MESSAGES_UPSERT",
+            "MESSAGES_UPDATE",
+            "MESSAGES_DELETE",
+            "SEND_MESSAGE",
+            "CONNECTION_UPDATE",
+            "QRCODE_UPDATED",
+          ],
+        }),
+      })
+
+      if (!webhookResponse.ok && webhookResponse.status === 401) {
+        webhookResponse = await fetch(`${cleanUrl}/webhook/set/${instanceName}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${evolutionApiKey}`,
+          },
+          body: JSON.stringify({
+            url: webhookUrl,
+            webhook_by_events: false,
+            webhook_base64: false,
+            events: [
+              "MESSAGES_UPSERT",
+              "MESSAGES_UPDATE",
+              "MESSAGES_DELETE",
+              "SEND_MESSAGE",
+              "CONNECTION_UPDATE",
+              "QRCODE_UPDATED",
+            ],
+          }),
+        })
+      }
+
+      if (webhookResponse.ok) {
+        webhookConfigured = true
+      } else {
+        const errorText = await webhookResponse.text()
+        console.warn("Falha ao configurar webhook automaticamente:", errorText)
+      }
+    } catch (error) {
+      console.warn("Erro ao configurar webhook automaticamente:", error)
     }
 
     // Tenta buscar QR Code se não veio na resposta
@@ -174,6 +249,8 @@ export async function POST(request: NextRequest) {
       success: true,
       instanceName: instanceName,
       qrcode: qrcode,
+      webhookConfigured,
+      webhookUrl,
     })
   } catch (error: any) {
     console.error("Erro ao criar instância:", error)

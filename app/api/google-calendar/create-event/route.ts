@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
       customerEmail,
       customerName,
       customerPhone,
+      serviceName,
+      serviceDurationMinutes,
       timezone = 'America/Sao_Paulo'
     } = body
 
@@ -83,7 +85,11 @@ export async function POST(request: NextRequest) {
     
     const event = {
       summary,
-      description: description || `Agendamento com ${customerName || 'Cliente'}`,
+      description:
+        description ||
+        (serviceName
+          ? `Agendamento de ${serviceName} com ${customerName || 'Cliente'}`
+          : `Agendamento com ${customerName || 'Cliente'}`),
       start: {
         dateTime: startDateTime,
         timeZone: timezone,
@@ -119,7 +125,11 @@ export async function POST(request: NextRequest) {
         customer_phone: customerPhone || '',
         customer_email: customerEmail,
         appointment_date: startDateTime,
-        duration_minutes: Math.floor((new Date(endDateTime).getTime() - new Date(startDateTime).getTime()) / 60000),
+        duration_minutes:
+          serviceDurationMinutes ||
+          Math.floor((new Date(endDateTime).getTime() - new Date(startDateTime).getTime()) / 60000),
+        service_name: serviceName,
+        service_duration_minutes: serviceDurationMinutes,
         status: 'scheduled',
         google_calendar_event_id: eventId,
       })
