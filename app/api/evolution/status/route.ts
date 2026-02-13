@@ -352,13 +352,15 @@ export async function GET(request: NextRequest) {
       if (instanceName) {
         try {
           // Tenta obter a URL base de várias fontes
-          let baseUrl = process.env.NEXT_PUBLIC_APP_URL
+          let baseUrl: string | undefined = process.env.NEXT_PUBLIC_APP_URL
           if (!baseUrl && process.env.VERCEL_URL) {
             baseUrl = `https://${process.env.VERCEL_URL}`
           }
           if (!baseUrl) {
-            baseUrl = request.headers.get('origin') || 
-                     (request.headers.get('host') ? `https://${request.headers.get('host')}` : null) ||
+            const origin = request.headers.get('origin')
+            const host = request.headers.get('host')
+            baseUrl = (origin ?? undefined) ?? 
+                     (host ? `https://${host}` : undefined) ??
                      'https://seu-dominio.com'
           }
           const webhookUrl = `${baseUrl}/api/webhook/whatsapp`
@@ -454,13 +456,15 @@ export async function GET(request: NextRequest) {
       // Se não encontrou webhook configurado, tenta configurar novamente
       if (!webhookConfigured && isConnected) {
         try {
-          let baseUrl = process.env.NEXT_PUBLIC_APP_URL
+          let baseUrl: string | undefined = process.env.NEXT_PUBLIC_APP_URL
           if (!baseUrl && process.env.VERCEL_URL) {
             baseUrl = `https://${process.env.VERCEL_URL}`
           }
           if (!baseUrl) {
-            baseUrl = request.headers.get('origin') || 
-                     (request.headers.get('host') ? `https://${request.headers.get('host')}` : null)
+            const origin = request.headers.get('origin')
+            const host = request.headers.get('host')
+            baseUrl = (origin ?? undefined) ?? 
+                     (host ? `https://${host}` : undefined)
           }
           
           if (baseUrl) {
