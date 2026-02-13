@@ -170,7 +170,7 @@ export async function GET(request: NextRequest) {
       console.log(`[Status API] Instância "${instanceName}" não encontrada, procurando primeira instância conectada`)
       const connectedInstances = instancesArray.filter((inst: any) => {
         const instData = inst.instance || inst
-        const instStatus = instData.status || instData.state || "unknown"
+        const instStatus = instData.connectionStatus || instData.status || instData.state || "unknown"
         return instStatus === "open" || 
                instStatus === "connected" || 
                instStatus?.toLowerCase() === "open" ||
@@ -216,7 +216,7 @@ export async function GET(request: NextRequest) {
         const instData = inst.instance || inst
         return {
           name: instData.instanceName || instData.name || "unknown",
-          status: instData.status || instData.state || "unknown"
+          status: instData.connectionStatus || instData.status || instData.state || "unknown"
         }
       })
       console.error(`[Status API] Nenhuma instância encontrada. Instâncias disponíveis:`, availableNames)
@@ -269,13 +269,14 @@ export async function GET(request: NextRequest) {
                        instanceData.number ||
                        instanceData.owner ||
                        instanceData.ownerNumber ||
+                       instanceData.ownerJid?.split('@')[0] || // Extrai número do ownerJid (ex: "553197599924@s.whatsapp.net")
                        instanceData.wid?.user || // WhatsApp ID format
                        instanceData.wid?.split('@')[0] || // Extrai número do JID
                        null
     
     // Verifica diferentes valores que indicam conexão
-    const status = instanceData.status || instanceData.state || instanceData.connectionState || "unknown"
-    const state = instanceData.state || instanceData.connectionState || status
+    const status = instanceData.connectionStatus || instanceData.status || instanceData.state || instanceData.connectionState || "unknown"
+    const state = instanceData.connectionStatus || instanceData.state || instanceData.connectionState || status
     
     // Verifica se está conectado de várias formas
     // Primeiro verifica estados explícitos de conexão
@@ -301,7 +302,9 @@ export async function GET(request: NextRequest) {
       status === "DISCONNECTED" ||
       state === "close" ||
       state === "closed" ||
-      state === "disconnected"
+      state === "disconnected" ||
+      instanceData.connectionStatus === "close" ||
+      instanceData.connectionStatus === "closed"
     
     // Se não tem QR code e não está explicitamente desconectado, provavelmente está conectado
     const hasConnectionIndicators = 

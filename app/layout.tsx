@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "SaaS Automação - AI Automation Manager",
-  description: "Gerencie seu atendente IA e produtos",
+  description: "Gerencie seu atendente IA e serviços de agendamento",
 }
 
 export default function RootLayout({

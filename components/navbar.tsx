@@ -43,10 +43,10 @@ export function Navbar() {
                 Agente
               </Button>
             </Link>
-            <Link href="/products">
+            <Link href="/services">
               <Button variant="ghost" size="sm">
-                <Package className="mr-2 h-4 w-4" />
-                Produtos
+                <Calendar className="mr-2 h-4 w-4" />
+                Serviços
               </Button>
             </Link>
             <Link href="/setup">

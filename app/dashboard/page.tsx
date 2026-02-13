@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { ensureUserProfileServer } from "@/lib/supabase/ensure-profile-server"
+import { getServicesTable } from "@/lib/supabase/get-services"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -35,8 +36,10 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .single()
 
-  const { data: products } = await supabase
-    .from("products")
+  // Tenta usar 'services', se não existir usa 'products' como fallback
+  const tableName = await getServicesTable(supabase)
+  const { data: services } = await supabase
+    .from(tableName)
     .select("id")
     .eq("user_id", user.id)
 
@@ -130,15 +133,15 @@ export default async function DashboardPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                Produtos
+                Serviços
               </CardTitle>
-              <CardDescription>Total de produtos cadastrados</CardDescription>
+              <CardDescription>Total de serviços cadastrados</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold">{products?.length || 0}</p>
-              <Link href="/products">
+              <p className="text-3xl font-bold">{services?.length || 0}</p>
+              <Link href="/services">
                 <Button variant="outline" className="mt-4 w-full">
-                  Gerenciar Produtos
+                  Gerenciar Serviços
                 </Button>
               </Link>
             </CardContent>
@@ -192,10 +195,10 @@ export default async function DashboardPage() {
                     Configurar Agente
                   </Button>
                 </Link>
-                <Link href="/products">
+                <Link href="/services">
                   <Button variant="outline" className="w-full">
                     <Package className="mr-2 h-4 w-4" />
-                    Adicionar Produto
+                    Adicionar Serviço
                   </Button>
                 </Link>
                 <Link href="/integration">

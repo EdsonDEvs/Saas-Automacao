@@ -354,18 +354,20 @@ export async function POST(
         )
       }
 
-      // Busca produtos ativos
-      const { data: products, error: productsError } = await supabase
-        .from("products")
+      // Busca serviços ativos (tenta 'services', se não existir usa 'products')
+      const { getServicesTable } = await import("@/lib/supabase/get-services")
+      const tableName = await getServicesTable(supabase)
+      const { data: services, error: servicesError } = await supabase
+        .from(tableName)
         .select("*")
         .eq("user_id", userId)
         .eq("stock_status", true)
         .order("name", { ascending: true })
 
-      if (productsError) {
-        console.error("[Webhook] Erro ao buscar produtos:", productsError)
+      if (servicesError) {
+        console.error("[Webhook] Erro ao buscar serviços:", servicesError)
         return NextResponse.json(
-          { error: "Erro ao buscar produtos." },
+          { error: "Erro ao buscar serviços." },
           { status: 500 }
         )
       }
@@ -378,12 +380,12 @@ export async function POST(
         .maybeSingle()
 
       // Formata inventário para LLM
-      const inventoryText = products
+      const inventoryText = services
         ?.map(
-          (product: any) =>
-            `- ${product.name} (R$ ${product.price.toFixed(2)}): ${product.description || "Sem descrição"}`
+          (service: any) =>
+            `- ${service.name} (R$ ${service.price.toFixed(2)}): ${service.description || "Sem descrição"}`
         )
-        .join("\n") || "Nenhum produto disponível no momento."
+        .join("\n") || "Nenhum serviço disponível no momento."
 
       // Monta contexto
       const context = {
@@ -402,11 +404,11 @@ export async function POST(
         ? agentConfig.service_catalog
         : []
       const serviceNames = serviceCatalog.map((service: any) => service.name).filter(Boolean)
-      const productNames = products?.map((product: any) => product.name).filter(Boolean) || []
+      const availableServiceNames = services?.map((service: any) => service.name).filter(Boolean) || []
       const appointmentIntent = detectAppointmentIntent(
         userMessage,
         fromNumber,
-        [...serviceNames, ...productNames]
+        [...serviceNames, ...availableServiceNames]
       )
       console.log(`[Webhook ${platform}] 📅 Intenção de agendamento:`, appointmentIntent)
 

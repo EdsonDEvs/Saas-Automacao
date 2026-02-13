@@ -67,6 +67,7 @@ export default function AgentPage() {
         setSystemPrompt(data.system_prompt)
         setTone(data.tone)
         setIsActive(data.is_active)
+        // Tenta carregar service_catalog, mas não falha se não existir
         setServiceCatalog(data.service_catalog || [])
       }
     } catch (error: any) {
@@ -91,34 +92,81 @@ export default function AgentPage() {
         return
       }
 
+      // Prepara os dados para atualização/inserção
+      const updateData: any = {
+        agent_name: agentName,
+        system_prompt: systemPrompt,
+        tone,
+        is_active: isActive,
+      }
+
+      // Só inclui service_catalog se a coluna existir (evita erro se migration não foi aplicada)
+      // O Supabase vai ignorar campos que não existem na tabela
+      try {
+        updateData.service_catalog = serviceCatalog
+      } catch (e) {
+        // Se houver erro, continua sem service_catalog
+        console.warn("service_catalog não disponível, continuando sem ele")
+      }
+
       if (config) {
         // Update existing
         const { error } = await supabase
           .from("agent_configs")
-          .update({
-            agent_name: agentName,
-            system_prompt: systemPrompt,
-            tone,
-            is_active: isActive,
-            service_catalog: serviceCatalog,
-          })
+          .update(updateData)
           .eq("id", config.id)
 
-        if (error) throw error
+        if (error) {
+          // Se o erro for sobre service_catalog não existir, tenta novamente sem ele
+          if (error.message?.includes("service_catalog") || error.message?.includes("schema cache")) {
+            const { service_catalog, ...dataWithoutCatalog } = updateData
+            const { error: retryError } = await supabase
+              .from("agent_configs")
+              .update(dataWithoutCatalog)
+              .eq("id", config.id)
+            
+            if (retryError) throw retryError
+            
+            toast({
+              title: "Aviso",
+              description: "Configurações salvas, mas service_catalog não está disponível. Aplique a migration 005 no Supabase.",
+              variant: "default",
+            })
+          } else {
+            throw error
+          }
+        }
       } else {
         // Create new
         const { error } = await supabase
           .from("agent_configs")
           .insert({
             user_id: user.id,
-            agent_name: agentName,
-            system_prompt: systemPrompt,
-            tone,
-            is_active: isActive,
-            service_catalog: serviceCatalog,
+            ...updateData,
           })
 
-        if (error) throw error
+        if (error) {
+          // Se o erro for sobre service_catalog não existir, tenta novamente sem ele
+          if (error.message?.includes("service_catalog") || error.message?.includes("schema cache")) {
+            const { service_catalog, ...dataWithoutCatalog } = updateData
+            const { error: retryError } = await supabase
+              .from("agent_configs")
+              .insert({
+                user_id: user.id,
+                ...dataWithoutCatalog,
+              })
+            
+            if (retryError) throw retryError
+            
+            toast({
+              title: "Aviso",
+              description: "Configurações salvas, mas service_catalog não está disponível. Aplique a migration 005 no Supabase.",
+              variant: "default",
+            })
+          } else {
+            throw error
+          }
+        }
       }
 
       toast({
@@ -194,7 +242,7 @@ export default function AgentPage() {
                   id="systemPrompt"
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
-                  placeholder="Ex: Você é um assistente virtual da empresa XYZ. Sempre seja educado e prestativo. Quando o cliente perguntar sobre produtos, forneça informações detalhadas..."
+                  placeholder="Ex: Você é um assistente virtual da empresa XYZ. Sempre seja educado e prestativo. Quando o cliente perguntar sobre serviços, forneça informações detalhadas..."
                   rows={10}
                   required
                 />

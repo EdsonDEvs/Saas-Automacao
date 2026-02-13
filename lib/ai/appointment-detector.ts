@@ -94,7 +94,7 @@ export function detectAppointmentIntent(
     }
   }
 
-  // Tenta detectar serviço com base nos produtos/serviços cadastrados
+  // Tenta detectar serviço com base nos serviços cadastrados
   let service: string | undefined
   if (serviceOptions.length > 0) {
     const normalizedOptions = serviceOptions.map((option) => option.trim()).filter(Boolean)

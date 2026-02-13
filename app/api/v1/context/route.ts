@@ -62,28 +62,30 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Fetch active products
-    const { data: products, error: productsError } = await supabase
-      .from("products")
+    // Fetch active services (tenta 'services', se não existir usa 'products')
+    const { getServicesTable } = await import("@/lib/supabase/get-services")
+    const tableName = await getServicesTable(supabase)
+    const { data: services, error: servicesError } = await supabase
+      .from(tableName)
       .select("*")
       .eq("user_id", userId)
       .eq("stock_status", true)
       .order("name", { ascending: true })
 
-    if (productsError) {
+    if (servicesError) {
       return NextResponse.json(
-        { error: "Erro ao buscar produtos." },
+        { error: "Erro ao buscar serviços." },
         { status: 500 }
       )
     }
 
     // Format inventory text for LLM
-    const inventoryText = products
+    const inventoryText = services
       ?.map(
-        (product) =>
-          `- ${product.name} (R$ ${product.price.toFixed(2)}): ${product.description || "Sem descrição"}`
+        (service) =>
+          `- ${service.name} (R$ ${service.price.toFixed(2)}): ${service.description || "Sem descrição"}`
       )
-      .join("\n") || "Nenhum produto disponível no momento."
+      .join("\n") || "Nenhum serviço disponível no momento."
 
     // Build response
     const response = {
