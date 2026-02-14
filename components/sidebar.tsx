@@ -129,14 +129,14 @@ export function Sidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed top-0 left-0 z-40 h-screen bg-background border-r transition-all duration-300 ease-in-out lg:translate-x-0",
+          "fixed top-0 left-0 z-40 h-screen bg-background border-r-2 border-primary/40 dark:border-primary/10 shadow-lg transition-all duration-300 ease-in-out lg:translate-x-0",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full",
           isCollapsed ? "w-16" : "w-64"
         )}
       >
-        <div className="flex h-full flex-col">
+        <div className="flex h-full flex-col bg-gradient-to-b from-background via-primary/8 to-background dark:via-transparent">
           {/* Logo */}
-          <div className="flex h-16 items-center justify-between border-b px-4">
+          <div className="flex h-16 items-center justify-between border-b-2 border-primary/20 dark:border-border bg-gradient-to-r from-primary/10 to-transparent dark:from-transparent px-4">
             <Link 
               href="/dashboard" 
               className={cn(
@@ -171,7 +171,7 @@ export function Sidebar() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
+          <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto bg-gradient-to-b from-transparent via-primary/3 to-transparent dark:via-transparent">
             {navigation.map((item) => {
               const isActive = pathname === item.href
               return (
@@ -180,10 +180,10 @@ export function Sidebar() {
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    "flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors relative group",
+                    "flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-all relative group border-l-2",
                     isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                      ? "bg-gradient-to-r from-primary/15 to-primary/8 text-primary border-l-primary shadow-sm font-semibold"
+                      : "text-muted-foreground hover:bg-gradient-to-r hover:from-primary/8 hover:to-transparent hover:text-primary border-l-transparent hover:border-l-primary/50 dark:hover:border-l-primary/30",
                     isCollapsed ? "justify-center" : "space-x-3"
                   )}
                   title={isCollapsed ? item.name : undefined}

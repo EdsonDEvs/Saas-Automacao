@@ -18,6 +18,9 @@ export function WhatsAppStatusCard({ instanceName, phoneNumber }: WhatsAppStatus
   const [availableInstances, setAvailableInstances] = useState<string[]>([])
   const [webhookConfigured, setWebhookConfigured] = useState<boolean | null>(null)
   const [webhookUrl, setWebhookUrl] = useState<string | null>(null)
+  const [currentPhoneNumber, setCurrentPhoneNumber] = useState<string | null>(phoneNumber || null)
+  const [profilePicture, setProfilePicture] = useState<string | null>(null)
+  const [contactInfo, setContactInfo] = useState<{ name?: string; status?: string } | null>(null)
   const { toast } = useToast()
 
   const checkStatus = async () => {
@@ -45,11 +48,17 @@ export function WhatsAppStatusCard({ instanceName, phoneNumber }: WhatsAppStatus
       setWebhookConfigured(data.webhookConfigured ?? null)
       setWebhookUrl(data.webhookUrl || null)
       
-      // Se recebeu um número diferente, pode ser que o número foi atualizado
-      if (data.phoneNumber && data.phoneNumber !== phoneNumber) {
-        console.log(`[WhatsApp Status] Número atualizado: ${data.phoneNumber}`)
-        // Recarrega a página para atualizar o número exibido
-        window.location.reload()
+      // Atualiza número, foto e informações do contato
+      if (data.phoneNumber) {
+        setCurrentPhoneNumber(data.phoneNumber)
+      }
+      
+      if (data.profilePicture) {
+        setProfilePicture(data.profilePicture)
+      }
+      
+      if (data.contactInfo) {
+        setContactInfo(data.contactInfo)
       }
       
       // Se está conectado mas webhook não está configurado, mostra aviso
@@ -118,8 +127,8 @@ export function WhatsAppStatusCard({ instanceName, phoneNumber }: WhatsAppStatus
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-          <span className="font-semibold text-gray-400">Verificando...</span>
+          <Loader2 className="h-5 w-5 animate-spin text-gray-400 dark:text-white/70" />
+          <span className="font-semibold text-gray-400 dark:text-white/90">Verificando...</span>
         </div>
       </div>
     )
@@ -130,15 +139,15 @@ export function WhatsAppStatusCard({ instanceName, phoneNumber }: WhatsAppStatus
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {isConnected ? (
-            <>
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
-              <span className="font-semibold text-green-500">Conectado</span>
-            </>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/20 dark:bg-green-500/20 border border-green-500/30 dark:border-green-500/50 shadow-sm dark:shadow-green-500/20">
+              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 animate-scale-in" />
+              <span className="font-bold text-green-700 dark:text-green-300">Conectado</span>
+            </div>
           ) : (
-            <>
-              <XCircle className="h-5 w-5 text-red-500" />
-              <span className="font-semibold text-red-500">Desconectado</span>
-            </>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/20 dark:bg-red-500/20 border border-red-500/30 dark:border-red-500/50 shadow-sm dark:shadow-red-500/20">
+              <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              <span className="font-bold text-red-700 dark:text-red-300">Desconectado</span>
+            </div>
           )}
         </div>
         <Button
@@ -156,15 +165,60 @@ export function WhatsAppStatusCard({ instanceName, phoneNumber }: WhatsAppStatus
         </Button>
       </div>
 
-      {phoneNumber && (
-        <p className="text-sm text-muted-foreground">
-          {phoneNumber}
-        </p>
+      {/* Foto de perfil e informações do contato */}
+      {isConnected && (profilePicture || contactInfo || currentPhoneNumber) && (
+        <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50 transition-all duration-200 hover:bg-muted/70 animate-fade-in">
+          {profilePicture ? (
+            <img 
+              src={profilePicture} 
+              alt="Foto de perfil" 
+              className="h-12 w-12 rounded-full object-cover ring-2 ring-primary/20 transition-all duration-200 hover:ring-primary/40"
+              onError={(e) => {
+                // Se a imagem falhar ao carregar, esconde
+                e.currentTarget.style.display = 'none'
+              }}
+            />
+          ) : (
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center ring-2 ring-primary/20 transition-all duration-200 hover:ring-primary/40">
+              <MessageCircle className="h-6 w-6 text-primary" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            {contactInfo?.name ? (
+              <p className="font-semibold text-sm truncate">{contactInfo.name}</p>
+            ) : currentPhoneNumber ? (
+              <p className="font-semibold text-sm truncate">{currentPhoneNumber}</p>
+            ) : null}
+            {contactInfo?.status && (
+              <p className="text-xs text-muted-foreground truncate">{contactInfo.status}</p>
+            )}
+            {currentPhoneNumber && !contactInfo?.name && (
+              <p className="text-xs text-muted-foreground">{currentPhoneNumber}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              Instância: {instanceName}
+            </p>
+          </div>
+        </div>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        Instância: {instanceName}
-      </p>
+      {/* Fallback se não tiver foto mas tiver número */}
+      {isConnected && !profilePicture && currentPhoneNumber && (
+        <div className="space-y-1">
+          <p className="text-sm font-medium">{currentPhoneNumber}</p>
+          <p className="text-xs text-muted-foreground">
+            Instância: {instanceName}
+          </p>
+        </div>
+      )}
+
+      {!isConnected && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">
+            Instância: {instanceName}
+          </p>
+        </div>
+      )}
 
       {status !== "unknown" && status !== "not_found" && status !== "error" && (
         <p className="text-xs text-muted-foreground capitalize">

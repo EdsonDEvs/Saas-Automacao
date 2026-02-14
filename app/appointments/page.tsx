@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Calendar, Clock, User, Phone, Mail, Settings, CheckCircle2, XCircle } from "lucide-react"
+import { Calendar, Clock, User, Phone, Mail, Settings, CheckCircle2, XCircle, Bell } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -125,7 +125,7 @@ export default function AppointmentsPage() {
     return (
       <span className={`px-2 py-1 rounded text-xs ${
         statusInfo.variant === "destructive" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
-        statusInfo.variant === "secondary" ? "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200" :
+        statusInfo.variant === "secondary" ? "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-white/90" :
         "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
       }`}>
         {statusInfo.label}
@@ -171,6 +171,12 @@ export default function AppointmentsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+            <Link href="/appointments/reminders">
+              <Button variant="outline">
+                <Bell className="mr-2 h-4 w-4" />
+                Lembretes
+              </Button>
+            </Link>
             <Link href="/appointments/settings">
               <Button variant="outline">
                 <Settings className="mr-2 h-4 w-4" />

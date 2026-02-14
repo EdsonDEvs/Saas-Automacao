@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     // Busca configuração da integração
     // Primeiro tenta buscar pela instância específica
-    let integration = await supabase
+    const { data: integrationData, error: integrationError } = await supabase
       .from("integrations")
       .select("webhook_url, api_key, instance_name")
       .eq("user_id", user.id)
@@ -34,7 +34,8 @@ export async function GET(request: NextRequest) {
       .maybeSingle()
     
     // Se não encontrou, busca qualquer integração WhatsApp do usuário
-    if (!integration.data) {
+    let finalIntegrationData = integrationData
+    if (!finalIntegrationData) {
       const { data: allIntegrations } = await supabase
         .from("integrations")
         .select("webhook_url, api_key, instance_name")
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
         .maybeSingle()
       
       if (allIntegrations) {
-        integration = { data: allIntegrations, error: null, count: null, status: 200, statusText: 'OK' }
+        finalIntegrationData = allIntegrations
         // Se encontrou uma integração diferente, usa o nome dela
         if (allIntegrations.instance_name && allIntegrations.instance_name !== instanceName) {
           console.log(`[Status API] Usando instância diferente: ${allIntegrations.instance_name} (procurado: ${instanceName})`)
@@ -52,9 +53,6 @@ export async function GET(request: NextRequest) {
         }
       }
     }
-    
-    const integrationData = integration.data
-    const integrationError = integration.error
 
     if (integrationError) {
       console.error("Erro ao buscar integração:", integrationError)
@@ -64,7 +62,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    if (!integrationData) {
+    if (!finalIntegrationData) {
       return NextResponse.json(
         { error: "Integração não encontrada", status: "not_found" },
         { status: 404 }
@@ -72,7 +70,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Remove barra final da URL se existir
-    const cleanUrl = integrationData.webhook_url.replace(/\/$/, "")
+    const cleanUrl = finalIntegrationData.webhook_url.replace(/\/$/, "")
     
     // Verifica status na Evolution API
     let statusResponse = await fetch(
@@ -80,7 +78,7 @@ export async function GET(request: NextRequest) {
       {
         method: "GET",
         headers: {
-          "apikey": integrationData.api_key,
+          "apikey": finalIntegrationData.api_key,
         },
       }
     )
@@ -92,7 +90,7 @@ export async function GET(request: NextRequest) {
         {
           method: "GET",
           headers: {
-            "Authorization": `Bearer ${integrationData.api_key}`,
+            "Authorization": `Bearer ${finalIntegrationData.api_key}`,
           },
         }
       )
@@ -246,7 +244,7 @@ export async function GET(request: NextRequest) {
           {
             method: "GET",
             headers: {
-              "apikey": integrationData.api_key,
+              "apikey": finalIntegrationData.api_key,
             },
           }
         )
@@ -371,15 +369,15 @@ export async function GET(request: NextRequest) {
           console.log(`[Status API] 🔧 Configurando webhook automaticamente...`)
           console.log(`[Status API] URL do webhook: ${webhookUrl}`)
           console.log(`[Status API] Instância: ${instanceName}`)
-          console.log(`[Status API] Evolution API URL: ${integrationData.webhook_url}`)
+          console.log(`[Status API] Evolution API URL: ${finalIntegrationData.webhook_url}`)
           
           const webhookResponse = await fetch(
-            `${integrationData.webhook_url}/webhook/set/${instanceName}`,
+            `${finalIntegrationData.webhook_url}/webhook/set/${instanceName}`,
             {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "apikey": integrationData.api_key,
+                "apikey": finalIntegrationData.api_key,
               },
               body: JSON.stringify({
                 url: webhookUrl,
@@ -418,7 +416,7 @@ export async function GET(request: NextRequest) {
     let webhookConfigured = false
     let webhookUrl = null
     if (instanceName && isConnected) {
-      const cleanUrl = integrationData.webhook_url.replace(/\/$/, "")
+      const cleanUrl = finalIntegrationData.webhook_url.replace(/\/$/, "")
       const checkEndpoints = [
         `/webhook/find/${instanceName}`,
         `/webhook/${instanceName}`,
@@ -430,7 +428,7 @@ export async function GET(request: NextRequest) {
           const checkResponse = await fetch(`${cleanUrl}${endpoint}`, {
             method: "GET",
             headers: {
-              "apikey": integrationData.api_key,
+              "apikey": finalIntegrationData.api_key,
             },
           })
           
@@ -480,7 +478,7 @@ export async function GET(request: NextRequest) {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  "apikey": integrationData.api_key,
+                  "apikey": finalIntegrationData.api_key,
                 },
                 body: JSON.stringify({
                   url: webhookUrlToSet,
@@ -507,6 +505,130 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Busca foto de perfil e informações do contato se estiver conectado
+    let profilePicture = null
+    let contactInfo = null
+    
+    if (isConnected && phoneNumber) {
+      try {
+        // Tenta buscar foto de perfil - diferentes endpoints possíveis
+        const profileEndpoints = [
+          `/chat/fetchProfilePictureUrl/${instanceName}?number=${phoneNumber}`,
+          `/profile/fetchProfilePictureUrl/${instanceName}?number=${phoneNumber}`,
+          `/profile/getProfilePicture/${instanceName}?number=${phoneNumber}`,
+        ]
+        
+        for (const endpoint of profileEndpoints) {
+          try {
+            const profileResponse = await fetch(
+              `${cleanUrl}${endpoint}`,
+              {
+                method: "GET",
+                headers: {
+                  "apikey": finalIntegrationData.api_key,
+                },
+              }
+            )
+            
+            if (profileResponse.ok) {
+              const profileData = await profileResponse.json()
+              profilePicture = profileData.url || 
+                             profileData.profilePictureUrl || 
+                             profileData.profilePicture || 
+                             profileData.base64 || 
+                             null
+              if (profilePicture) break
+            }
+          } catch (error) {
+            // Continua tentando outros endpoints
+            continue
+          }
+        }
+      } catch (error) {
+        console.warn("[Status API] Erro ao buscar foto de perfil:", error)
+      }
+      
+      try {
+        // Tenta buscar informações do contato - diferentes endpoints possíveis
+        const contactEndpoints = [
+          `/chat/fetchContacts/${instanceName}`,
+          `/contact/fetchContacts/${instanceName}`,
+          `/chat/getContacts/${instanceName}`,
+        ]
+        
+        for (const endpoint of contactEndpoints) {
+          try {
+            const contactResponse = await fetch(
+              `${cleanUrl}${endpoint}`,
+              {
+                method: "GET",
+                headers: {
+                  "apikey": finalIntegrationData.api_key,
+                },
+              }
+            )
+            
+            if (contactResponse.ok) {
+              const contactsData = await contactResponse.json()
+              // Procura o contato pelo número
+              const contactsArray = Array.isArray(contactsData) 
+                ? contactsData 
+                : (contactsData.data || contactsData.contacts || [])
+              
+              if (contactsArray.length > 0) {
+                const contact = contactsArray.find((c: any) => {
+                  const contactId = c.id || c.jid || c.number || ""
+                  return contactId.includes(phoneNumber) || 
+                         contactId === phoneNumber ||
+                         contactId === `${phoneNumber}@s.whatsapp.net`
+                })
+                
+                if (contact) {
+                  contactInfo = {
+                    name: contact.name || contact.pushName || contact.notifyName || contact.displayName || null,
+                    status: contact.status || contact.about || null,
+                  }
+                  break
+                }
+              }
+            }
+          } catch (error) {
+            // Continua tentando outros endpoints
+            continue
+          }
+        }
+        
+        // Se não encontrou nas listas, tenta buscar diretamente pelo número
+        if (!contactInfo) {
+          try {
+            const directContactResponse = await fetch(
+              `${cleanUrl}/chat/fetchContact/${instanceName}?number=${phoneNumber}`,
+              {
+                method: "GET",
+                headers: {
+                  "apikey": finalIntegrationData.api_key,
+                },
+              }
+            )
+            
+            if (directContactResponse.ok) {
+              const contactData = await directContactResponse.json()
+              if (contactData) {
+                contactInfo = {
+                  name: contactData.name || contactData.pushName || contactData.notifyName || contactData.displayName || null,
+                  status: contactData.status || contactData.about || null,
+                }
+              }
+            }
+          } catch (error) {
+            // Ignora erro
+          }
+        }
+      } catch (error) {
+        console.warn("[Status API] Erro ao buscar informações do contato:", error)
+      }
+    }
+
     return NextResponse.json({
       connected: isConnected,
       status: instanceData.status || instanceData.state || "unknown",
@@ -514,6 +636,8 @@ export async function GET(request: NextRequest) {
       phoneNumber: phoneNumber,
       webhookConfigured: webhookConfigured,
       webhookUrl: webhookUrl,
+      profilePicture: profilePicture,
+      contactInfo: contactInfo,
       instanceData: {
         status: instanceData.status,
         state: instanceData.state,

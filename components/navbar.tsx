@@ -24,8 +24,8 @@ export function Navbar() {
   }
 
   return (
-    <nav className="border-b">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+    <nav className="border-b-2 border-primary/30 dark:border-border bg-background/95 backdrop-blur-sm shadow-sm">
+      <div className="container mx-auto flex h-16 items-center justify-between px-4 bg-gradient-to-r from-primary/10 via-transparent to-info/10 dark:from-transparent dark:to-transparent">
         <div className="flex items-center space-x-6">
           <Link href="/dashboard" className="text-xl font-bold">
             SaaS Automação
